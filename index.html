@@ -574,19 +574,30 @@ function saveHistory(id, list) { memoryHistory[id] = list; try { localStorage.se
 const memoryHistory = {};
 const DAY = 86400000;
 /* How long after the last call the follow-up happens: what was agreed ("kal shaam" = next day), else a week. */
+const NUM_WORDS = { ek:1, one:1, "एक":1, do:2, two:2, "दो":2, teen:3, three:3, "तीन":3, char:4, chaar:4, four:4, "चार":4,
+  paanch:5, panch:5, five:5, "पांच":5, "पाँच":5, chhe:6, chhah:6, six:6, "छह":6, saat:7, seven:7, "सात":7 };
+const WEEKDAYS = [["sunday","ravivar","ravivaar","रविवार","itwar","itvaar"],["monday","somvar","somvaar","सोमवार"],["tuesday","mangalvar","mangalvaar","मंगलवार"],
+  ["wednesday","budhvar","budhvaar","बुधवार"],["thursday","guruvar","guruvaar","brihaspativar","गुरुवार","बृहस्पतिवार"],["friday","shukravar","shukravaar","शुक्रवार"],["saturday","shanivar","shanivaar","शनिवार"]];
+/* How long after the last call the follow-up happens, from what the seller agreed. */
 function followUpGapDays(prev) {
   const f = String(prev && prev.followUp || "").toLowerCase();
-  if (/\b(kal|tomorrow|कल)\b/.test(f) || f.includes("कल")) return 1;
+  if (!f) return 7;
   if (/(parso|parson|day after|परसों)/.test(f)) return 2;
+  if (/\b(kal|tomorrow)\b/.test(f) || f.includes("कल")) return 1;
+  const m = f.match(/(\d+|[a-z]+|[\u0900-\u097F]+)\s*(din|days?|दिन)/);
+  if (m) { const n = /^\d+$/.test(m[1]) ? Number(m[1]) : NUM_WORDS[m[1]]; if (n >= 1 && n <= 30) return n; }
+  if (/(hafte|hafta|week|हफ्ते|सप्ताह)/.test(f)) return 7;
+  const from = new Date(prev.simulatedAt || Date.now()).getDay();
+  for (let d = 0; d < 7; d++) if (WEEKDAYS[d].some(w => f.includes(w))) return ((d - from + 7) % 7) || 7;
   return 7;
 }
-const gapLabel = d => d === 1 ? "the next day" : d === 2 ? "two days later" : "one week later";
+const gapLabel = d => d === 1 ? "the next day" : d === 2 ? "two days later" : d === 7 ? "one week later" : `${d} days later`;
 const fmtDate = iso => new Date(iso).toLocaleDateString("en-IN", { weekday:"short", day:"numeric", month:"short" });
 
 /* What happened in the week after the last call, based on what was agreed. */
 function simulateProgress(s, a, rec) {
   const gapDays = followUpGapDays(rec);
-  const items = []; let extraWeekly = 0;
+  const items = [], restocked = []; let extraWeekly = 0;
   const weekly = n => n / 4.3 * Math.min(1, gapDays / 7);
   for (const act of rec.actions) {
     const p = act.params || {};
@@ -595,9 +606,10 @@ function simulateProgress(s, a, rec) {
         items.push({ title:"Stock corrected on listings", status:"working", result:`Cancellation rate since the last call is 8.5 percent, down from ${Math.round(a.N.cancelRate*100)} percent. No new cancellations from empty listings.` });
         extraWeekly += weekly(a.cancelRecoveryOrders); break;
       case "create_restock_plan": {
-        const picks = a.newlyOos.slice(0, p.top_n || 5);
+        const picks = p.products ? a.newlyOos.filter(x => p.products.includes(x.name)) : a.newlyOos.slice(0, p.top_n || 5);
         const delayed = picks.length >= 3 ? picks[2] : null;
         const done = picks.filter(x => x !== delayed);
+        restocked.push(...done.map(x => x.name));
         const gained = done.reduce((t,x) => t + x.lastMonthOrders, 0);
         items.push({ title:`Restock of ${picks.length} products`, status:delayed ? "partly" : "working",
           result:`${done.length} of ${picks.length} restocked${p.restock_by ? " (seller had promised: " + p.restock_by + ")" : ""}. They brought about ${Math.round(weekly(gained)*0.9)} orders since then.` +
@@ -633,7 +645,7 @@ function simulateProgress(s, a, rec) {
     }
   }
   const weeklyBefore = Math.round(a.N.orders / 4.3 * Math.min(1, gapDays / 7));
-  return { items, gapDays, weeklyBefore, weeklyNow:Math.round(weeklyBefore + extraWeekly) };
+  return { items, gapDays, restocked, weeklyBefore, weeklyNow:Math.round(weeklyBefore + extraWeekly) };
 }
 
 /* =========================================================================
@@ -717,7 +729,9 @@ YOUR LAST CALL WITH THIS SELLER (${fmtDate(prev.simulatedAt)})
     p += `
 
 WHAT HAPPENED SINCE (this call is ${gapLabel(progress.gapDays)}${prev.followUp ? ", at the follow-up time agreed: " + prev.followUp : ""})
-${progress.items.length ? `- Orders since the last call: about ${progress.weeklyNow}, against about ${progress.weeklyBefore} in the same length of time before it.` : "- No actions were taken in the last call, so there are no results to check. Pick up where the last call stopped."}
+${CTX.stock.restocked.length ? `- Products back in stock: ${CTX.stock.restocked.join(", ")}. Never suggest restocking these again.
+- Still out of stock, best sellers first: ${stillOut(a).slice(0, 6).map(p => p.name).join(", ")}.
+` : ""}${progress.items.length ? `- Orders since the last call: about ${progress.weeklyNow}, against about ${progress.weeklyBefore} in the same length of time before it.` : "- No actions were taken in the last call, so there are no results to check. Pick up where the last call stopped."}
 ${progress.items.map(i => `- ${i.title} [${i.status === "working" ? "working" : i.status === "partly" ? "partly done" : "needs attention"}]: ${i.result}`).join("\n")}
 
 HOW THIS FOLLOW-UP CALL SHOULD GO
@@ -841,7 +855,7 @@ function releaseHeld(why) {
   if (sock && sock.readyState === 1) sock.send(JSON.stringify({ toolResponse:{ functionResponses:calls.map(fc => ({ id:fc.id, name:fc.name, response:{ result } })) } }));
 }
 function dropHeld(ids) {
-  held.calls = held.calls.filter(fc => !ids || !ids.includes(fc.id));
+  held.calls = ids ? held.calls.filter(fc => !ids.includes(fc.id)) : [];
   if (!held.calls.length) { clearTimeout(held.timer); clearTimeout(held.timeout); }
 }
 function closingGuard(tool) {
@@ -878,7 +892,11 @@ function notApplicable(why) { return { error:"This action does not apply to this
 const TOOL_HANDLERS = {
   get_out_of_stock_products() {
     const { s, a } = CTX; logEvent("Checked out-of-stock products");
-    return { products:s.oosProducts.map(p => ({ id:p.id, name:p.name, orders_last_month:p.lastMonthOrders, ran_out_this_month:p.newThisMonth, listing_still_shows_stock:p.ghost, cancelled_orders_this_month:p.cancelledThisMonth })),
+    const back = new Set(CTX.stock.restocked), fixed = CTX.stock.listingsFixed, out = stillOut(a);
+    return { products:s.oosProducts.map(p => ({ id:p.id, name:p.name, orders_last_month:p.lastMonthOrders, ran_out_this_month:p.newThisMonth,
+        status:back.has(p.name) ? "back in stock (restocked since an earlier call)" : "out of stock",
+        listing_still_shows_stock:p.ghost && !fixed && !back.has(p.name), cancelled_orders_this_month:p.cancelledThisMonth })),
+      still_out_of_stock_best_sellers_first:out.map(p => `${p.name} (${p.lastMonthOrders} orders last month)`),
       summary:{ out_of_stock_total:s.oosProducts.length, ran_out_this_month:a.newlyOos.length, their_orders_last_month:a.newlyOosOrders, value_per_month:speak(a.newlyOosOrders * s.asp),
         top_5_orders_last_month:a.top5Orders, top_5_value_per_month:speak(a.top5Orders * s.asp), listings_wrongly_showing_stock:a.ghosts.length, cancellations_from_them:a.ghostCancels } };
   },
@@ -912,18 +930,20 @@ const TOOL_HANDLERS = {
     setHypothesis(key, status, evidence); return { ok:true };
   },
   fix_listing_stock() {
-    const { a } = CTX; if (!a.ghosts.length) return notApplicable("no listing shows stock the seller does not have");
+    const { a } = CTX; if (!a.ghosts.length || CTX.stock.listingsFixed) return notApplicable(CTX.stock.listingsFixed ? "these listings were already corrected in an earlier call" : "no listing shows stock the seller does not have");
     const names = a.ghosts.map(p => p.name);
     addAction("fix_listing_stock", {}, { title:`Stock corrected on ${names.length} listings`, body:`Set to zero: ${names.slice(0,3).join(", ")}${names.length > 3 ? ` and ${names.length-3} more` : ""}.`,
       impact:`Stops about ${a.ghostCancels} cancellations a month`, status:"done", label:"Done" });
     return { ok:true, listings_updated:names.length, expected_effect:`About ${a.ghostCancels} fewer cancellations a month` };
   },
   create_restock_plan({ top_n = 5, restock_by }) {
-    const { s, a } = CTX; if (!a.newlyOos.length) return notApplicable("no products ran out of stock this month");
-    const n = Math.max(1, Math.min(a.newlyOos.length, Math.round(Number(top_n) || 5)));
-    const picks = a.newlyOos.slice(0, n), orders = picks.reduce((t,p) => t + p.lastMonthOrders, 0);
+    const { s, a } = CTX, avail = stillOut(a);
+    if (!a.newlyOos.length) return notApplicable("no products ran out of stock this month");
+    if (!avail.length) return notApplicable("every product that ran out has been restocked");
+    const n = Math.max(1, Math.min(avail.length, Math.round(Number(top_n) || 5)));
+    const picks = avail.slice(0, n), orders = picks.reduce((t,p) => t + p.lastMonthOrders, 0);
     const share = Math.round(orders / a.newlyOosOrders * 100);
-    addAction("create_restock_plan", { top_n:n, restock_by }, { title:`Restock plan: top ${n} product${n > 1 ? "s" : ""}`,
+    addAction("create_restock_plan", { top_n:n, restock_by, products:picks.map(p => p.name) }, { title:`Restock plan: top ${n} product${n > 1 ? "s" : ""}`,
       body:`${picks.slice(0,3).map(p => p.name).join(", ")}${n > 3 ? ` and ${n-3} more` : ""}.${restock_by ? ` Seller restocks: ${restock_by}.` : ""}`,
       impact:`Recovers about ${fmtINR(orders * s.asp)} a month (${share}% of lost orders)`, status:"waiting", label:"Seller to restock" }, "create_restock_plan");
     return { ok:true, products:picks.map(p => p.name), value_per_month:speak(orders * s.asp), share_of_lost_orders_percent:share, restock_by:restock_by || "not agreed yet: ask the seller" };
@@ -1065,6 +1085,8 @@ function newCallState() {
     actions:[], margin:null, productCuts:{}, promoDiscount:{}, followUp:null, escalations:[], whatsapp:null, report:null, turns:[], startedAt:0, connected:false };
 }
 function currentSeller() { return SELLERS[$("sellerSel").value]; }
+/* Products still out of stock now, after restocks reported since earlier calls (best sellers first). */
+function stillOut(a) { const back = new Set((CTX.stock && CTX.stock.restocked) || []); return a.newlyOos.filter(p => !back.has(p.name)); }
 
 function renderSeller() {
   const s = currentSeller(), a = analyse(s), hist = loadHistory(s.id), prev = hist[hist.length - 1] || null;
@@ -1084,6 +1106,8 @@ function renderSeller() {
   $("metricsFoot").textContent = s.fromBrief ? "The first five rows are from the assignment brief. The last two are assumed." : "Invented seller, to test the KAM on a different problem.";
   $("langSel").value = s.language;
   CTX = { s, a, prev, mode:null, language:s.language, progress:prev ? simulateProgress(s, a, prev) : null };
+  CTX.stock = { restocked:[...new Set([...((prev && prev.stock && prev.stock.restocked) || []), ...((CTX.progress && CTX.progress.restocked) || [])])],
+                listingsFixed:!!(prev && ((prev.stock && prev.stock.listingsFixed) || prev.actions.some(x => x.type === "fix_listing_stock"))) };
   CALL = newCallState();
   if (prev) {
     Object.assign(CALL.board, JSON.parse(JSON.stringify(prev.diagnosis)));
@@ -1190,7 +1214,9 @@ function appendTranscript(role, text) {
   currentTurn.txt.textContent = role === "kam" ? cleanKamText(currentTurn.raw) : currentTurn.raw;
   t.scrollTop = t.scrollHeight;
 }
+function noteDrop(text) { logEvent(text, true); }
 function logEvent(text, isError = false) {
+  if (CALL && CALL.turns) CALL.turns.push({ role:"event", raw:text });
   const t = $("transcript"); const empty = $("emptyState"); if (empty) empty.remove();
   const el = document.createElement("div"); el.className = "event" + (isError ? " err" : ""); el.textContent = text;
   t.appendChild(el); t.scrollTop = t.scrollHeight; currentTurn = null;
@@ -1210,7 +1236,9 @@ function saveCallRecord() {
     type:prev ? "Follow-up call" : CTX.mode === "outbound" ? "KAM called the seller" : "Seller called the KAM",
     durationSec, language:CTX.language, diagnosis:JSON.parse(JSON.stringify(CALL.board)), actions:CALL.actions, followUp:CALL.followUp,
     margin:CALL.margin, productCuts:{ ...CALL.productCuts },
+    stock:{ restocked:CTX.stock.restocked, listingsFixed:CTX.stock.listingsFixed || CALL.actions.some(x => x.type === "fix_listing_stock") },
     escalations:CALL.escalations, whatsapp:CALL.whatsapp, report:CALL.report, progress:CTX.progress,
+    reconnects:CALL.reconnects || 0,
     transcript:CALL.turns.map(t => ({ role:t.role, text:t.role === "kam" ? cleanKamText(t.raw).trim() : t.raw.trim() }))
   };
   hist.push(rec); saveHistory(s.id, hist);
@@ -1229,6 +1257,7 @@ function reportText(s, rec) {
   lines.push("", "Risks:", ...((r.risks || []).length ? r.risks.map(x => "- " + x) : ["- Not recorded"]));
   lines.push("", `Follow-up: ${rec.followUp || "not scheduled"}`, `Escalations: ${rec.escalations.length ? rec.escalations.join("; ") : "none"}`);
   lines.push(`Next best action for the KAM team: ${r.next_best_action || "not recorded"}`);
+  if (rec.reconnects) lines.push(`Line drops recovered during the call: ${rec.reconnects}`);
   return lines.join("\n");
 }
 let reportShown = null;
@@ -1399,19 +1428,28 @@ async function startCall(mode) {
   catch (e) { if (my === callSeq) failCall(e.message); return; }
   if (my !== callSeq) return;
 
+  CALL.resumeHandle = null; CALL.reconnects = 0;
+  openSession(url, mode, false);
+}
+
+/* One WebSocket session. A dropped line reconnects into the same call (see reconnect below). */
+function openSession(url, mode, isReconnect) {
   const model = $("modelSel").value, isLegacy = !model.startsWith("gemini-3.8");
   const sock = new WebSocket(url); ws = sock;
 
   sock.onopen = () => {
     const tools = TOOL_DEFS.map(t => isLegacy ? t : { ...t, behavior:"BLOCKING" });
-    sock.send(JSON.stringify({ setup:{
+    const setup = {
       model:"models/" + model,
       generationConfig:{ responseModalities:["AUDIO"], speechConfig:{ voiceConfig:{ prebuiltVoiceConfig:{ voiceName:$("voiceSel").value } } } },
       systemInstruction:{ parts:[{ text:buildSystemPrompt(CTX) }] },
       tools:[{ functionDeclarations:tools }],
       inputAudioTranscription:{}, outputAudioTranscription:{},
       realtimeInputConfig:{ automaticActivityDetection:{ silenceDurationMs:1000, prefixPaddingMs:300 } }
-    }}));
+    };
+    // Session resumption: Google's recommended way to survive a dropped connection.
+    if (!isLegacy) setup.sessionResumption = CALL.resumeHandle ? { handle:CALL.resumeHandle } : {};
+    sock.send(JSON.stringify({ setup }));
   };
 
   sock.onmessage = async ev => {
@@ -1420,16 +1458,24 @@ async function startCall(mode) {
     let msg; try { msg = JSON.parse(raw); } catch { return; }
     if (msg.setupComplete) {
       audio.onChunk = b64 => { if (sock.readyState === 1) sock.send(JSON.stringify({ realtimeInput:{ audio:{ data:b64, mimeType:"audio/pcm;rate=16000" } } })); };
-      CALL.connected = true; CALL.startedAt = Date.now();
-      setStatus("live", CTX.prev ? "On call (follow-up)" : mode === "outbound" ? "On call (KAM called you)" : "On call");
-      timerId = setInterval(tick, 1000); tick();
-      const kick = kickoffText(CTX);
-      sock.send(JSON.stringify(isLegacy ? { realtimeInput:{ text:kick } } : { clientContent:{ turns:[{ role:"user", parts:[{ text:kick }] }], turnComplete:true } }));
+      const label = CTX.prev ? "On call (follow-up)" : mode === "outbound" ? "On call (KAM called you)" : "On call";
+      if (!isReconnect) {
+        CALL.connected = true; CALL.startedAt = Date.now();
+        setStatus("live", label);
+        timerId = setInterval(tick, 1000); tick();
+        const kick = kickoffText(CTX);
+        sock.send(JSON.stringify(isLegacy ? { realtimeInput:{ text:kick } } : { clientContent:{ turns:[{ role:"user", parts:[{ text:kick }] }], turnComplete:true } }));
+      } else {
+        setStatus("live", label); logEvent("Reconnected");
+        const note = resumeNote(CALL.resumedWithHandle);
+        sock.send(JSON.stringify(isLegacy ? { realtimeInput:{ text:note } } : { clientContent:{ turns:[{ role:"user", parts:[{ text:note }] }], turnComplete:true } }));
+      }
       return;
     }
+    if (msg.sessionResumptionUpdate && msg.sessionResumptionUpdate.resumable && msg.sessionResumptionUpdate.newHandle) CALL.resumeHandle = msg.sessionResumptionUpdate.newHandle;
     if (msg.toolCall) { await handleToolCall(sock, msg.toolCall); return; }
     if (msg.toolCallCancellation) { dropHeld(msg.toolCallCancellation.ids); return; }
-    if (msg.goAway) logEvent("The call will end soon (session time limit)");
+    if (msg.goAway) { CALL.goAway = true; console.warn("Live API goAway", msg.goAway); }
     const sc = msg.serverContent; if (!sc) return;
     if (sc.interrupted) { flushPlayback(); if (currentTurn && currentTurn.role === "kam") currentTurn.el.classList.add("interrupted"); currentTurn = null; }
     if (sc.inputTranscription && sc.inputTranscription.text) appendTranscript("seller", sc.inputTranscription.text);
@@ -1441,10 +1487,50 @@ async function startCall(mode) {
   sock.onclose = ev => {
     if (ws !== sock) return;
     if (pendingHangup) { endCall(); return; }
-    const reason = ev.reason || (ev.code !== 1000 ? "code " + ev.code : "");
-    failCall("The call disconnected" + (reason ? ": " + reason : "") + ". " + explainClose(ev));
+    const reason = ev.reason || (ev.code !== 1000 ? "code " + ev.code : "closed by the server");
+    const wasHolding = held.calls.length > 0;
+    console.warn("Live API closed", ev.code, ev.reason, { wasHolding, goAway:CALL.goAway });
+    // Recorded in the transcript and report, so the real cause of drops can be found.
+    noteDrop(`Line dropped (${reason}${CALL.goAway ? ", after a time-limit notice" : ""}${wasHolding ? ", while an action waited for the seller's answer" : ""})`);
+    if (CALL.connected && CALL.reconnects < 3) { reconnect(mode, ev); return; }
+    failCall("The call disconnected: " + reason + ". " + explainClose(ev));
   };
 }
+
+async function reconnect(mode, ev) {
+  CALL.reconnects++; CALL.goAway = false;
+  if (CALL.reconnects >= 2) CALL.resumeHandle = null;   // a handle that failed once: fall back to replaying the conversation
+  audio.onChunk = null; dropHeld(); turnOpen = false;
+  ws = null;                                   // the old socket is finished
+  setStatus("connecting", "Reconnecting…");
+  const my = callSeq;
+  await new Promise(r => setTimeout(r, 600 * CALL.reconnects));
+  if (my !== callSeq) return;                  // the seller hung up meanwhile
+  let url;
+  try { url = await getAuthUrl(); }
+  catch (e) { if (my === callSeq) failCall("Could not reconnect: " + e.message); return; }
+  if (my !== callSeq) return;
+  CALL.resumedWithHandle = !!CALL.resumeHandle;
+  openSession(url, mode, true);
+}
+
+/* What the KAM is told after a reconnect. With a resumption handle it still has the whole conversation;
+   without one it gets a recap, so it can continue without repeating finished actions. */
+function resumeNote(withHandle) {
+  const ask = "Say briefly that the line dropped for a moment, then repeat your last point or question in one short sentence and continue. Do not repeat actions already done.";
+  if (withHandle) return `[The phone line dropped for a moment and is back. ${ask}]`;
+  const recent = CALL.turns.filter(t => t.role !== "event").slice(-12)
+    .map(t => `${t.role === "kam" ? "You" : CTX.s.first}: ${t.role === "kam" ? cleanKamText(t.raw).trim() : t.raw.trim()}`).join("\n");
+  const done = CALL.actions.map(x => x.title).join("; ") || "none yet";
+  const board = Object.entries(CALL.board).map(([k, v]) => `${k}: ${v.status}`).join(", ");
+  return `[The phone line dropped and you are reconnected. You lost your memory of the call, so here is what happened so far.
+Conversation (most recent last):
+${recent}
+Actions already done in this call: ${done}.
+Diagnosis board: ${board}.
+${ask}]`;
+}
+
 function explainClose(ev) {
   const r = (ev.reason || "").toLowerCase();
   if (r.includes("quota") || r.includes("rate") || r.includes("exhausted") || r.includes("billing") || r.includes("prepay")) return "The API key hit a usage or billing limit. Wait a minute, try the other model in Settings, or check billing.";
@@ -1526,7 +1612,7 @@ $("copyReportBtn").onclick = async () => {
 };
 $("downloadTranscriptBtn").onclick = () => {
   if (!reportShown) return;
-  const s = CTX.s, lines = reportShown.transcript.map(t => `${t.role === "kam" ? "Virtual KAM" : s.first + " (seller)"}: ${t.text}`);
+  const s = CTX.s, lines = reportShown.transcript.map(t => t.role === "event" ? `[${t.text}]` : `${t.role === "kam" ? "Virtual KAM" : s.first + " (seller)"}: ${t.text}`);
   const blob = new Blob([reportText(s, reportShown) + "\n\nTRANSCRIPT\n" + lines.join("\n")], { type:"text/plain" });
   const link = document.createElement("a"); link.href = URL.createObjectURL(blob);
   link.download = `kam-call-${s.id}-${reportShown.simulatedAt.slice(0,10)}.txt`; link.click();
