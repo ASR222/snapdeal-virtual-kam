@@ -607,16 +607,24 @@ function simulateProgress(s, a, rec) {
         extraWeekly += weekly(a.cancelRecoveryOrders); break;
       case "create_restock_plan": {
         const picks = p.products ? a.newlyOos.filter(x => p.products.includes(x.name)) : a.newlyOos.slice(0, p.top_n || 5);
+        const lowOnes = p.products ? p.products.filter(n => !a.newlyOos.some(x => x.name === n)) : [];
+        restocked.push(...lowOnes);
         const delayed = picks.length >= 3 ? picks[2] : null;
         const done = picks.filter(x => x !== delayed);
         restocked.push(...done.map(x => x.name));
         const gained = done.reduce((t,x) => t + x.lastMonthOrders, 0);
-        items.push({ title:`Restock of ${picks.length} products`, status:delayed ? "partly" : "working",
-          result:`${done.length} of ${picks.length} restocked${p.restock_by ? " (seller had promised: " + p.restock_by + ")" : ""}. They brought about ${Math.round(weekly(gained)*0.9)} orders since then.` +
+        if (!picks.length) { items.push({ title:"Restock of products running low", status:"working", result:`${lowOnes.join(", ")} restocked before running out.` }); break; }
+        const total = picks.length + lowOnes.length;
+        items.push({ title:`Restock of ${total} product${total > 1 ? "s" : ""}`, status:delayed ? "partly" : "working",
+          result:`Restocked: ${done.map(x => x.name).concat(lowOnes).join(", ") || "none"}${p.restock_by ? " (seller had promised: " + p.restock_by + ")" : ""}. They brought about ${Math.round(weekly(gained)*0.9)} orders since then.` +
                  (delayed ? ` ${delayed.name} is still out of stock: the supplier has not delivered.` : "") });
         extraWeekly += weekly(gained) * 0.9; break; }
       case "set_low_stock_alert": {
-        const lowItem = s.prices[s.prices.length - 1].name;
+        // The alert flags a product that is not already being restocked.
+        const busy = new Set([...((rec.stock && rec.stock.restocked) || []), ...rec.actions.filter(x => x.type === "create_restock_plan").flatMap(x => (x.params && x.params.products) || [])]);
+        const lowPick = s.prices.slice().reverse().find(x => !busy.has(x.name));
+        if (!lowPick) break;
+        const lowItem = lowPick.name;
         items.push({ title:"Low-stock alert", status:"attention", result:`The alert fired twice since the last call. ${lowItem} is down to 3 pieces and has not been reordered yet.` }); break; }
       case "update_prices": {
         const changed = a.gapProducts.filter(g => !p.product_ids || !p.product_ids.length || p.product_ids.includes(g.id));
@@ -665,7 +673,7 @@ function buildSystemPrompt(ctx) {
 
 RULES THAT MATTER MOST
 A. Ask, then wait. When you ask permission ("Shall I do that?"), your turn ends there. Stop speaking and wait for the seller's answer. Never ask and act in the same turn, and never say something is done before the seller agrees and the tool confirms it. If a tool says the seller has not answered yet, simply wait in silence: do not apologise and do not mention it.
-B. Tools are silent. Using a tool is an action, not something you say. Never speak or write tool names, parameters, brackets or anything that looks like code.
+B. Tools are silent. Using a tool is an action, not something you say. Never speak or write tool names, parameters, brackets or anything that looks like code, and never mention internal steps such as filing the call report.
 C. Never guess what you did not hear clearly. If a day, time, number or product name was unclear, ask again in a few words ("Maaf kijiye, kaun sa din?").
 C2. Listen and use the seller's own words. If the seller gives a date, a number or a preference ("2 din mein", "Monday shaam"), use exactly that, in your speech and in the tools. Never replace it with your own suggestion. If they have not given a day and time for a follow-up, ask for one.
 D. End with a spoken summary before goodbye, unless the seller says they do not want one. Say it once; never repeat yourself.
@@ -704,7 +712,7 @@ There are four possible causes on the seller's screen: stockouts, cancellations,
 
 ACTIONS YOU CAN TAKE (only after the seller agrees; the tools tell you if an action does not apply to this seller)
 - fix_listing_stock: set stock to zero on products that show stock the seller does not have. Stops new cancellations.
-- create_restock_plan: restock the products that sold most before running out. If cash is tight, suggest only the top 5.
+- create_restock_plan: restock the products that sold most before running out. If cash is tight, suggest only the top 5. When the seller names specific products, pass exactly those as product_names; adding a product later means calling it again with the full list. If they want a plan but cannot give a date yet, make it anyway and say the date is open.
 - set_low_stock_alert: a WhatsApp alert, plus a note in the seller panel, when a product falls to a few pieces.
 - Price cuts and sale discounts add up on the same product. Together they must leave the seller a profit. Let the tools do this maths: if the seller suggests a different combination, try it with the tools rather than refusing from memory, and if a tool refuses, explain its exact reason. Suggest the smallest cut that helps, and describe the result exactly: if a product will still cost more than the cheapest competitor, say so.
 - update_prices: lower prices on overpriced products. Ask their margin first and pass a max_cut_percent that leaves them a profit. Never suggest a cut larger than their margin. If the margin cannot cover the gap to competitors, say so honestly and offer what is possible: a small cut on the best seller only, pushing the products where they are already competitive, a combo offer (for example kurti with dupatta), or asking their supplier for a better rate.
@@ -730,7 +738,7 @@ YOUR LAST CALL WITH THIS SELLER (${fmtDate(prev.simulatedAt)})
 
 WHAT HAPPENED SINCE (this call is ${gapLabel(progress.gapDays)}${prev.followUp ? ", at the follow-up time agreed: " + prev.followUp : ""})
 ${CTX.stock.restocked.length ? `- Products back in stock: ${CTX.stock.restocked.join(", ")}. Never suggest restocking these again.
-- Still out of stock, best sellers first: ${stillOut(a).slice(0, 6).map(p => p.name).join(", ")}.
+- Still out of stock, best sellers first: ${stillOut(a).slice(0, 6).map(p => p.name).join(", ")}. When the seller asks what to restock next, name the top two or three from this list, plus any product a low-stock alert flagged.
 ` : ""}${progress.items.length ? `- Orders since the last call: about ${progress.weeklyNow}, against about ${progress.weeklyBefore} in the same length of time before it.` : "- No actions were taken in the last call, so there are no results to check. Pick up where the last call stopped."}
 ${progress.items.map(i => `- ${i.title} [${i.status === "working" ? "working" : i.status === "partly" ? "partly done" : "needs attention"}]: ${i.result}`).join("\n")}
 
@@ -785,9 +793,10 @@ const TOOL_DEFS = [
     parameters:obj({ issue:{ type:"string", enum:Object.keys(ISSUES) }, status:{ type:"string", enum:["suspected","confirmed","ruled_out"] },
       evidence:{ type:"string", description:"One short line of evidence, under 15 words, in English" } }, ["issue","status","evidence"]) },
   { name:"fix_listing_stock", description:"Set stock to zero on products whose listing shows stock the seller does not have. Only after the seller agrees.", parameters:obj() },
-  { name:"create_restock_plan", description:"Restock plan for the products that ran out this month, ordered by lost orders. Only after the seller agrees. Call again to update it.",
-    parameters:obj({ top_n:{ type:"integer", description:"How many products, 1 to 13. Use 5 if cash is tight." },
-      restock_by:{ type:"string", description:"When the seller said they can restock, in their own words" } }, ["top_n"]) },
+  { name:"create_restock_plan", description:"Restock plan. Either name the exact products agreed with the seller (product_names), or use top_n for the best-selling products still out of stock. Only after the seller agrees. Call again to change it; the new plan replaces the old one.",
+    parameters:obj({ product_names:{ type:"array", items:{ type:"string" }, description:"The exact products agreed, as named in the data (out-of-stock or low-stock products)" },
+      top_n:{ type:"integer", description:"Used only when no product_names: how many best sellers still out of stock, 1 to 13. Use 5 if cash is tight." },
+      restock_by:{ type:"string", description:"When the seller said they can restock, in their own words. Leave empty if they have not said." } }) },
   { name:"mark_products_out_of_stock", description:"Mark named products as out of stock so customers cannot order them. Only after the seller agrees.",
     parameters:obj({ product_names:{ type:"array", items:{ type:"string" }, description:"Product names as the seller or the data called them" } }, ["product_names"]) },
   { name:"set_low_stock_alert", description:"WhatsApp alert plus a seller panel note when any product falls to the threshold. Only after the seller agrees.",
@@ -936,17 +945,37 @@ const TOOL_HANDLERS = {
       impact:`Stops about ${a.ghostCancels} cancellations a month`, status:"done", label:"Done" });
     return { ok:true, listings_updated:names.length, expected_effect:`About ${a.ghostCancels} fewer cancellations a month` };
   },
-  create_restock_plan({ top_n = 5, restock_by }) {
+  create_restock_plan({ product_names = [], top_n = 5, restock_by }) {
     const { s, a } = CTX, avail = stillOut(a);
-    if (!a.newlyOos.length) return notApplicable("no products ran out of stock this month");
-    if (!avail.length) return notApplicable("every product that ran out has been restocked");
-    const n = Math.max(1, Math.min(avail.length, Math.round(Number(top_n) || 5)));
-    const picks = avail.slice(0, n), orders = picks.reduce((t,p) => t + p.lastMonthOrders, 0);
-    const share = Math.round(orders / a.newlyOosOrders * 100);
-    addAction("create_restock_plan", { top_n:n, restock_by, products:picks.map(p => p.name) }, { title:`Restock plan: top ${n} product${n > 1 ? "s" : ""}`,
-      body:`${picks.slice(0,3).map(p => p.name).join(", ")}${n > 3 ? ` and ${n-3} more` : ""}.${restock_by ? ` Seller restocks: ${restock_by}.` : ""}`,
-      impact:`Recovers about ${fmtINR(orders * s.asp)} a month (${share}% of lost orders)`, status:"waiting", label:"Seller to restock" }, "create_restock_plan");
-    return { ok:true, products:picks.map(p => p.name), value_per_month:speak(orders * s.asp), share_of_lost_orders_percent:share, restock_by:restock_by || "not agreed yet: ask the seller" };
+    let picks;
+    if (product_names.length) {
+      // Out-of-stock products, plus products running low (they can be restocked before they run out).
+      const pool = [...avail, ...s.prices.filter(p => !avail.some(x => x.name === p.name)).map(p => ({ name:p.name, lastMonthOrders:0, lowStock:true }))];
+      const words = x => String(x).toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w.length > 2);
+      picks = []; const unknown = [];
+      for (const want of product_names) {
+        const ws = words(want);
+        const hit = pool.find(p => ws.length && ws.every(w => words(p.name).some(x => x.startsWith(w) || w.startsWith(x)))) || pool.find(p => ws.some(w => words(p.name).includes(w)));
+        if (hit && !picks.includes(hit)) picks.push(hit); else if (!hit) unknown.push(want);
+      }
+      if (!picks.length) return { error:"None of those products can go in a restock plan. Still out of stock: " + avail.slice(0, 6).map(p => p.name).join(", ") + "." };
+      const backNames = CTX.stock.restocked || [];
+      const alreadyBack = unknown.filter(u => backNames.some(n => words(n).some(w => words(u).includes(w))));
+      if (alreadyBack.length) return { error:`Not done: ${alreadyBack.join(", ")} is already back in stock. Tell the seller, and suggest from what is still out of stock: ${avail.slice(0, 4).map(p => p.name).join(", ")}.` };
+      if (unknown.length) return { error:`Not done: could not find ${unknown.join(", ")}. Still out of stock: ${avail.slice(0, 6).map(p => p.name).join(", ")}. Check the name with the seller and try again.` };
+    } else {
+      if (!a.newlyOos.length) return notApplicable("no products ran out of stock this month");
+      if (!avail.length) return notApplicable("every product that ran out has been restocked");
+      const n = Math.max(1, Math.min(avail.length, Math.round(Number(top_n) || 5)));
+      picks = avail.slice(0, n);
+    }
+    const n = picks.length, orders = picks.reduce((t,p) => t + p.lastMonthOrders, 0);
+    const share = a.newlyOosOrders ? Math.round(orders / a.newlyOosOrders * 100) : 0;
+    addAction("create_restock_plan", { top_n:n, restock_by, products:picks.map(p => p.name) }, { title:`Restock plan: ${n} product${n > 1 ? "s" : ""}`,
+      body:`${picks.map(p => p.name + (p.lowStock ? " (running low)" : "")).join(", ")}.${restock_by ? ` Seller restocks: ${restock_by}.` : " Date not agreed yet."}`,
+      impact:orders ? `Recovers about ${fmtINR(orders * s.asp)} a month (${share}% of lost orders)` : "Prevents the next stock-out", status:"waiting", label:"Seller to restock" }, "create_restock_plan");
+    return { ok:true, products_in_plan:picks.map(p => p.name), note:"Only the products listed here are in the plan. Name exactly these when you confirm.",
+      value_per_month:speak(orders * s.asp), share_of_lost_orders_percent:share, restock_by:restock_by || "not agreed yet" };
   },
   mark_products_out_of_stock({ product_names = [] }) {
     const { s } = CTX;
@@ -1143,11 +1172,11 @@ function setHypothesis(key, status, evidence) {
   if (evidence) el.querySelector(".hyp-ev").textContent = evidence;
   el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
 }
-function renderProgress() {
+function renderProgress(next) {
   const box = $("progress"); box.innerHTML = "";
-  const pr = CTX.progress;
+  const pr = next || CTX.progress;
   if (!pr) return;
-  box.innerHTML = `<div class="subhead">Since the last call (${gapLabel(pr.gapDays)}, simulated). Read this before the call: the KAM sees the same results.</div>` +
+  box.innerHTML = `<div class="subhead">${next ? `Before the next call: what will have happened ${gapLabel(pr.gapDays)} (simulated). Read this before the follow-up: the KAM sees the same results.` : `Since the last call (${gapLabel(pr.gapDays)}, simulated). Read this before the call: the KAM sees the same results.`}</div>` +
     (pr.items.length ? `<div class="week num">Orders since then <b>${pr.weeklyNow}</b> <span class="muted">vs about ${pr.weeklyBefore} in the same time before</span></div>`
                      : `<div class="week">No actions were taken last call, so there are no results to check yet.</div>`);
   const labels = { working:"Working", partly:"Partly done", attention:"Needs attention" };
@@ -1577,6 +1606,13 @@ function failCall(message) {
 function refreshAfterCall() {
   const s = CTX.s, hist = loadHistory(s.id), prev = hist[hist.length - 1] || null;
   if (!prev) return;
+  // Show now what the next follow-up will find, so the person playing the seller can read it first.
+  const stockBefore = CTX.stock;
+  CTX.stock = { restocked:[...new Set([...((prev.stock && prev.stock.restocked) || [])])], listingsFixed:!!(prev.stock && prev.stock.listingsFixed) };
+  const next = simulateProgress(s, CTX.a, prev);
+  CTX.stock = stockBefore;
+  renderProgress(next);
+  $("progress").scrollIntoView({ block:"nearest" });
   $("outboundBtn").textContent = "KAM’s follow-up call";
   const banner = $("followBanner"); banner.hidden = false;
   banner.textContent = `Call saved. The next call with ${s.first} is simulated ${gapLabel(followUpGapDays(prev))}, at the follow-up time agreed, so the KAM can check progress. Clear this seller’s call history to start over.`;
