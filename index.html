@@ -1,0 +1,1477 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Virtual KAM · Seller panel prototype</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📞</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mukta:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F4F5F7; --surface:#FFFFFF; --sunk:#EEF0F3; --ink:#1B1F2A; --muted:#5D6475; --line:#DFE2E8;
+  --brand:#E40046; --brand-ink:#FFFFFF; --brand-soft:#FDE6EE; --brand-deep:#B80038;
+  --ok:#147A4B; --ok-soft:#E3F3EA; --warn:#995500; --warn-soft:#FBF0DC; --info:#2B59C3; --info-soft:#E6ECFA;
+  --quiet:#7A8296; --quiet-soft:#EEF0F4;
+  --wa-bg:#E7F6DD; --wa-ink:#173A22; --wa-btn:#1E7A4A;
+  --topbar-h:56px;
+  color-scheme: light; box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0F131A; --surface:#171C25; --sunk:#1E2430; --ink:#E8EBF2; --muted:#9AA3B5; --line:#2A3140;
+    --brand:#FF4D7D; --brand-ink:#16070C; --brand-soft:#3B1624; --brand-deep:#FF4D7D;
+    --ok:#3CCB86; --ok-soft:#173226; --warn:#F2A93B; --warn-soft:#3A2B12; --info:#86A6FF; --info-soft:#1B2645;
+    --quiet:#8790A3; --quiet-soft:#222836;
+    --wa-bg:#1B3325; --wa-ink:#D9F2DF; --wa-btn:#3CCB86;
+    color-scheme: dark;
+  }
+}
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Mukta",system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Devanagari",sans-serif;font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
+button,select,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--info);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+
+/* Top bar */
+.topbar{height:var(--topbar-h);display:flex;align-items:center;gap:14px;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;white-space:nowrap}
+.brand .mark{width:26px;height:26px;border-radius:7px;background:var(--brand);color:#fff;display:grid;place-items:center;font-size:14px;font-weight:700}
+.brand small{font-weight:500;color:var(--muted);font-size:13px;border:1px solid var(--line);border-radius:999px;padding:0 8px}
+.topbar .spacer{flex:1}
+.seller-switch{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted)}
+.seller-switch select{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 10px;font-weight:600;color:var(--ink);max-width:320px}
+.linkbtn{white-space:nowrap;background:none;border:0;color:var(--muted);cursor:pointer;padding:6px 8px;border-radius:6px;font-size:14px}
+.linkbtn:hover{color:var(--ink);background:var(--sunk)}
+
+/* Shell */
+.shell{display:grid;grid-template-columns:200px minmax(0,1fr);height:calc(100% - var(--topbar-h))}
+.sidenav{background:var(--surface);border-right:1px solid var(--line);padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.navitem{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:8px;color:var(--muted);font-weight:500;font-size:14.5px;cursor:not-allowed}
+.navitem.active{background:var(--brand-soft);color:var(--brand-deep);font-weight:600;cursor:default;box-shadow:inset 3px 0 0 var(--brand)}
+.navitem .tag{font-size:11.5px;font-weight:700;background:var(--brand);color:var(--brand-ink);border-radius:5px;padding:0 6px}
+.navnote{margin-top:auto;font-size:12.5px;color:var(--muted);padding:8px 12px}
+.page{display:flex;flex-direction:column;min-height:0;min-width:0}
+.page-head{padding:14px 20px 0;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.page-head h1{font-size:22px;margin:0;font-weight:700;letter-spacing:-.01em}
+.page-head p{margin:0 0 2px;color:var(--muted)}
+.followup-banner{margin:10px 20px 0;padding:8px 12px;border-radius:10px;background:var(--info-soft);color:var(--info);font-size:14px;font-weight:500}
+.followup-banner[hidden]{display:none}
+
+/* Panels grid */
+main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(290px,330px) minmax(0,1fr) minmax(300px,350px);gap:14px;padding:12px 20px 20px}
+section.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;min-height:0}
+.panel h2{font-size:16px;font-weight:600;margin:0}
+.panel-head{padding:14px 16px 10px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.panel-head small{color:var(--muted);font-size:13px}
+.scroll{overflow:auto;min-height:0}
+
+/* Seller account */
+.seller{padding:0 16px 10px}
+.seller .name{font-size:18px;font-weight:600}
+.seller .meta{color:var(--muted);font-size:14px}
+.metrics-wrap{padding:0 16px 6px}
+table.metrics{width:100%;border-collapse:collapse;font-size:14px}
+.metrics th{font-weight:500;color:var(--muted);text-align:right;padding:6px 0;border-bottom:1px solid var(--line);white-space:nowrap}
+.metrics th:first-child,.metrics td:first-child{text-align:left}
+.metrics td{padding:6px 0;border-bottom:1px solid var(--line);text-align:right}
+.metrics th+th,.metrics td+td{padding-left:10px}
+.metrics tr:last-child td{border-bottom:0}
+.delta-bad{color:var(--brand-deep);font-weight:600}
+.delta-flat{color:var(--muted)}
+.foot{font-size:12.5px;color:var(--muted);padding:2px 16px 8px}
+
+/* Diagnosis board */
+.diag{padding:4px 12px 14px;display:flex;flex-direction:column;gap:8px}
+.diag-intro{color:var(--muted);font-size:13px;padding:0 4px 2px}
+.hyp{border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--surface);transition:border-color .3s, background-color .3s}
+.hyp-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.hyp-name{font-weight:600}
+.hyp-ev{font-size:13.5px;color:var(--muted);margin-top:3px}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;padding:2px 9px;border-radius:999px;white-space:nowrap;background:var(--quiet-soft);color:var(--quiet)}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.hyp[data-status="suspected"]{border-color:var(--warn)}
+.hyp[data-status="suspected"] .pill{background:var(--warn-soft);color:var(--warn)}
+.hyp[data-status="confirmed"]{border-color:var(--brand);background:var(--brand-soft)}
+.hyp[data-status="confirmed"] .pill{background:var(--brand);color:var(--brand-ink)}
+.hyp[data-status="ruled_out"]{opacity:.8}
+.hyp[data-status="ruled_out"] .pill{background:var(--ok-soft);color:var(--ok)}
+.hyp[data-status="ruled_out"] .hyp-name{text-decoration:line-through;text-decoration-thickness:1px}
+.hyp.flash{animation:flash 1.1s ease-out}
+@keyframes flash{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--brand) 45%,transparent)}100%{box-shadow:0 0 0 10px transparent}}
+
+/* Call */
+.call-top{padding:14px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;border-bottom:1px solid var(--line)}
+.status{display:flex;align-items:center;gap:8px;font-weight:600}
+.status .dot{width:10px;height:10px;border-radius:50%;background:var(--quiet)}
+.status[data-state="live"] .dot{background:var(--ok);box-shadow:0 0 0 4px var(--ok-soft)}
+.status[data-state="connecting"] .dot{background:var(--warn)}
+.status[data-state="error"] .dot{background:var(--brand)}
+.timer{color:var(--muted);font-weight:500}
+.call-actions{flex-basis:100%;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.call-top>.lang{margin-left:auto}
+.lang{display:flex;align-items:center;gap:6px;font-size:13.5px;color:var(--muted)}
+.lang select{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 8px;color:var(--ink)}
+.btn{border:1px solid var(--line);background:var(--surface);padding:8px 13px;border-radius:10px;cursor:pointer;font-weight:600;font-size:14.5px}
+.btn:hover{background:var(--sunk)}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:var(--brand-ink)}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.end{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.btn[hidden]{display:none}
+.levels{display:flex;gap:20px;padding:9px 16px;border-bottom:1px solid var(--line);font-size:13px;color:var(--muted);align-items:center}
+.level{display:flex;align-items:center;gap:8px;flex:1;max-width:240px}
+.bar{flex:1;height:6px;border-radius:3px;background:var(--sunk);overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--info);transition:width 80ms linear}
+.bar.kam i{background:var(--brand)}
+.hint{margin-left:auto;font-size:13px}
+.transcript{flex:1;padding:16px;display:flex;flex-direction:column;gap:10px}
+.empty{margin:auto;max-width:460px;text-align:center;color:var(--muted)}
+.empty h3{color:var(--ink);font-size:20px;margin:0 0 6px;font-weight:600}
+.empty p{margin:0 0 6px}
+.turn{max-width:82%;padding:9px 13px;border-radius:12px;line-height:1.5;font-size:15.5px}
+.turn .who{display:block;font-size:12.5px;color:var(--muted);font-weight:600;margin-bottom:1px}
+.turn.kam{align-self:flex-start;background:var(--sunk)}
+.turn.seller{align-self:flex-end;background:var(--info-soft)}
+.turn.interrupted::after{content:" — interrupted";color:var(--muted);font-size:13px}
+.event{align-self:center;font-size:13px;color:var(--muted);background:var(--surface);border:1px dashed var(--line);padding:3px 10px;border-radius:999px;text-align:center}
+.event.err{color:var(--brand-deep);border-color:var(--brand)}
+
+/* Right column */
+.plan{padding:4px 12px 12px;display:flex;flex-direction:column;gap:8px}
+.plan-empty{color:var(--muted);font-size:14px;padding:6px 4px}
+.subhead{font-size:13px;font-weight:600;color:var(--muted);padding:6px 4px 0}
+.act{border:1px solid var(--line);border-radius:10px;padding:9px 12px;animation:appear .35s ease-out}
+@keyframes appear{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.act-top{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.act-title{font-weight:600}
+.act-body{font-size:13.5px;color:var(--muted);margin-top:3px}
+.act-impact{font-size:13.5px;margin-top:4px;color:var(--ok);font-weight:600}
+.pill.done,.pill.working{background:var(--ok-soft);color:var(--ok)}
+.pill.waiting,.pill.partly{background:var(--warn-soft);color:var(--warn)}
+.pill.scheduled{background:var(--info-soft);color:var(--info)}
+.pill.escalated,.pill.attention{background:var(--brand-soft);color:var(--brand-deep)}
+.week{border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:var(--sunk);font-size:14px}
+.week b{font-size:16px}
+.wa{margin:4px 12px 16px;border-radius:12px;background:var(--wa-bg);color:var(--wa-ink);padding:12px 14px;animation:appear .35s ease-out}
+.wa-head{font-size:13px;font-weight:600;opacity:.8;margin-bottom:6px}
+.wa-msg{white-space:pre-wrap;font-size:14px;line-height:1.5}
+.wa a{display:inline-block;margin-top:10px;background:var(--wa-btn);color:#fff;text-decoration:none;font-weight:600;padding:8px 12px;border-radius:9px;font-size:14px}
+
+/* Dialogs */
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);max-width:640px;width:calc(100% - 32px);padding:20px 22px}
+dialog::backdrop{background:rgb(10 14 22 / .45)}
+dialog h3{margin:0 0 8px;font-size:19px}
+dialog h4{margin:16px 0 4px;font-size:15px}
+dialog ul{padding-left:18px;margin:6px 0}
+dialog li{margin:3px 0}
+dialog label{display:block;font-weight:600;margin:14px 0 4px;font-size:14px}
+dialog select,dialog input{width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+dialog .help{color:var(--muted);font-size:13px;margin-top:4px}
+dialog .row{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;flex-wrap:wrap}
+.kv{display:grid;grid-template-columns:150px 1fr;gap:4px 12px;font-size:14.5px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0}
+.report-body{max-height:62vh;overflow:auto;padding-right:4px}
+.hist-item{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0;display:flex;justify-content:space-between;gap:10px;align-items:center}
+.muted{color:var(--muted)}
+
+@media (max-width:1180px){
+  .shell{grid-template-columns:1fr;height:auto}
+  .sidenav{display:none}
+  main{grid-template-columns:1fr}
+  main>section[aria-label="Call"]{order:-1;min-height:70vh}
+}
+@media (max-width:640px){
+  .topbar{padding:8px 12px;gap:6px 8px;height:auto;flex-wrap:wrap}
+  .topbar .spacer{display:none}
+  .seller-switch{order:3;flex-basis:100%}
+  .seller-switch select{max-width:none;width:100%}
+  .linkbtn{padding:4px 6px}
+  .brand small,.seller-switch span,#aboutBtn{display:none}
+  .page-head{padding:12px 12px 0}
+  main{padding:10px 12px 16px}
+  .levels .hint{display:none}
+  .turn{max-width:92%}
+  .kv{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="mark" aria-hidden="true">S</span>Seller panel <small>Prototype</small></div>
+  <div class="spacer"></div>
+  <label class="seller-switch"><span>Seller</span><select id="sellerSel" aria-label="Seller account"></select></label>
+  <button class="linkbtn" id="historyBtn">Call history</button>
+  <button class="linkbtn" id="aboutBtn">About this data</button>
+  <button class="linkbtn" id="settingsBtn">Settings</button>
+</header>
+
+<div class="shell">
+  <nav class="sidenav" aria-label="Seller panel">
+    <div class="navitem" aria-disabled="true">Dashboard</div>
+    <div class="navitem" aria-disabled="true">Orders</div>
+    <div class="navitem" aria-disabled="true">Inventory</div>
+    <div class="navitem" aria-disabled="true">Pricing</div>
+    <div class="navitem" aria-disabled="true">Advertising</div>
+    <div class="navitem" aria-disabled="true">Payments</div>
+    <div class="navitem" aria-disabled="true">Performance</div>
+    <div class="navitem active" aria-current="page">Virtual KAM <span class="tag">AI</span></div>
+    <div class="navnote">Only Virtual KAM is built in this prototype.</div>
+  </nav>
+
+  <div class="page">
+    <div class="page-head">
+      <h1>Virtual KAM</h1>
+      <p>Your AI account manager. Talk to it about your business, in Hindi or English.</p>
+    </div>
+    <div class="followup-banner" id="followBanner" hidden></div>
+
+    <main>
+      <section class="panel" aria-labelledby="acctTitle">
+        <div class="panel-head"><h2 id="acctTitle">Seller account</h2><small>Mock data</small></div>
+        <div class="seller"><div class="name" id="sellerName"></div><div class="meta" id="sellerMeta"></div></div>
+        <div class="metrics-wrap">
+          <table class="metrics num" id="metricsTable"><thead><tr><th>Metric</th><th>Last month</th><th>This month</th></tr></thead><tbody></tbody></table>
+        </div>
+        <div class="foot" id="metricsFoot"></div>
+        <div class="panel-head" style="padding-top:6px"><h2>What’s causing the drop</h2></div>
+        <div class="diag scroll" id="diagBoard" style="flex:1"></div>
+      </section>
+
+      <section class="panel" aria-label="Call">
+        <div class="call-top">
+          <div class="status" id="status" data-state="idle"><span class="dot"></span><span id="statusText">Ready</span></div>
+          <span class="timer num" id="timer"></span>
+          <label class="lang" id="langWrap">Call language
+            <select id="langSel"><option value="hinglish">Hinglish</option><option value="hindi">Hindi</option><option value="english">English</option></select>
+          </label>
+          <div class="call-actions">
+            <button class="btn primary" id="inboundBtn">Call the KAM</button>
+            <button class="btn" id="outboundBtn">Let the KAM call you</button>
+            <button class="btn" id="reportBtn" hidden>Call report</button>
+            <button class="btn end" id="endBtn" hidden>End call</button>
+          </div>
+        </div>
+        <div class="levels">
+          <div class="level"><span>You</span><div class="bar"><i id="micLevel"></i></div></div>
+          <div class="level"><span>KAM</span><div class="bar kam"><i id="kamLevel"></i></div></div>
+          <span class="hint">Use headphones so the KAM doesn’t hear itself.</span>
+        </div>
+        <div class="transcript scroll" id="transcript" aria-live="polite"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="planTitle">
+        <div class="panel-head"><h2 id="planTitle">Action plan</h2><small id="planCount"></small></div>
+        <div class="scroll" style="flex:1">
+          <div class="plan" id="progress"></div>
+          <div class="plan" id="plan"></div>
+          <div id="waSlot"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<dialog id="aboutDlg">
+  <h3>About this data</h3>
+  <p>Gupta Home &amp; Kitchen uses the five metrics from the assignment brief. Everything else is a labelled assumption, added so the KAM can investigate the way a real account manager would:</p>
+  <ul>
+    <li>“Orders” are delivered orders; sales = orders × average selling price; cancellation rate = cancelled ÷ placed orders.</li>
+    <li>Listing impressions, visits and conversion are invented for all three sellers.</li>
+    <li>Sharma Ethnic Wear and Raza Mobile Accessories are invented sellers with different root causes (competitor pricing, and lost visibility), to show the KAM diagnoses from data rather than following a script.</li>
+    <li>Product lists, competitor prices, cancellation reasons, ads and hidden-listing details are invented.</li>
+    <li>Rupee impact estimates use simple stated rules, for example a lost product’s orders are estimated from what it sold last month.</li>
+    <li>Follow-up calls are simulated one week after the previous call, with results based on what was agreed.</li>
+  </ul>
+  <p>Every action is simulated. Nothing connects to Snapdeal systems. Call history is stored only in this browser.</p>
+  <div class="row"><button class="btn" data-close>Close</button></div>
+</dialog>
+
+<dialog id="settingsDlg">
+  <h3>Settings</h3>
+  <label for="voiceSel">KAM voice</label>
+  <select id="voiceSel">
+    <option value="Kore">Kore (clear, steady)</option>
+    <option value="Charon">Charon (deep, calm)</option>
+    <option value="Aoede">Aoede (warm)</option>
+    <option value="Puck">Puck (upbeat)</option>
+  </select>
+  <label for="modelSel">Model</label>
+  <select id="modelSel">
+    <option value="gemini-3.8-live">Gemini 3.8 Live</option>
+    <option value="gemini-3.1-flash-live-preview">Gemini 3.1 Flash Live (older fallback)</option>
+  </select>
+  <label for="keyInput">Gemini API key for local testing</label>
+  <input id="keyInput" type="password" autocomplete="off" placeholder="Only needed when the page runs without its server">
+  <div class="help">When the page is deployed with its server function, leave this empty. The key stays in this browser tab and is never saved.</div>
+  <div class="row"><button class="btn" data-close>Done</button></div>
+</dialog>
+
+<dialog id="reportDlg">
+  <h3 id="reportTitle">Call report</h3>
+  <div class="report-body" id="reportBody"></div>
+  <div class="row">
+    <button class="btn" id="copyReportBtn">Copy report</button>
+    <button class="btn" id="downloadTranscriptBtn">Download transcript</button>
+    <button class="btn primary" data-close>Close</button>
+  </div>
+</dialog>
+
+<dialog id="historyDlg">
+  <h3 id="historyTitle">Call history</h3>
+  <div id="historyBody"></div>
+  <div class="row">
+    <button class="btn" id="clearHistoryBtn">Clear this seller’s history</button>
+    <button class="btn primary" data-close>Close</button>
+  </div>
+</dialog>
+<script>
+"use strict";
+/* =========================================================================
+   1. HELPERS: money and numbers, written out so the KAM never garbles them
+   ========================================================================= */
+const $ = id => document.getElementById(id);
+const fmtINR = n => "₹" + Math.round(n).toLocaleString("en-IN");
+const fmtNum = n => Math.round(n).toLocaleString("en-IN");
+const pctChange = (a, b) => Math.round((b - a) / a * 1000) / 10;
+const HI = ("shoonya ek do teen chaar paanch chhah saat aath nau das gyaarah baarah terah chaudah pandrah solah satrah athaarah unnees bees "+
+  "ikkees baaees teis chaubees pachchees chhabbees sattaees atthaaees untees tees ikattees battees taintees chauntees paintees chhattees saintees adtees untaalees chaalees "+
+  "iktaalees bayaalees taintaalees chavaalees paintaalees chhiyaalees saintaalees adtaalees unchaas pachaas ikyaavan baavan tirpan chauvan pachpan chhappan sattaavan atthaavan unsath saath "+
+  "iksath baasath tirsath chaunsath painsath chhiyaasath sadsath adsath unhattar sattar ikhattar bahattar tihattar chauhattar pachhattar chhihattar satattar athattar unaasi assi "+
+  "ikyaasi bayaasi tiraasi chauraasi pachaasi chhiyaasi sattaasi atthaasi navaasi nabbe ikyaanve baanve tiraanve chauraanve pachaanve chhiyaanve sattaanve atthaanve ninyaanve").split(" ");
+const EN1 = "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen".split(" ");
+const EN10 = ",,twenty,thirty,forty,fifty,sixty,seventy,eighty,ninety".split(",");
+const en99 = n => n < 20 ? EN1[n] : EN10[Math.floor(n/10)] + (n%10 ? "-" + EN1[n%10] : "");
+function indianParts(n) { return { lakh:Math.floor(n/1e5), hazaar:Math.floor(n%1e5/1000), sau:Math.floor(n%1000/100), rest:n%100 }; }
+function hindiWords(n) {
+  if (n === 0) return HI[0];
+  const p = indianParts(n), out = [];
+  if (p.lakh) out.push(HI[p.lakh] + " lakh"); if (p.hazaar) out.push(HI[p.hazaar] + " hazaar");
+  if (p.sau) out.push(HI[p.sau] + " sau"); if (p.rest) out.push(HI[p.rest]);
+  return out.join(" ");
+}
+function englishWords(n) {
+  if (n === 0) return "zero";
+  const p = indianParts(n), out = [];
+  if (p.lakh) out.push(en99(p.lakh) + " lakh"); if (p.hazaar) out.push(en99(p.hazaar) + " thousand");
+  if (p.sau) out.push(en99(p.sau) + " hundred"); if (p.rest) out.push(en99(p.rest));
+  return out.join(" ");
+}
+/* Rounded for speech, with exact Hindi and English wording attached. */
+function speak(n) {
+  const r = n >= 10000 ? Math.round(n / 500) * 500 : n >= 1000 ? Math.round(n / 100) * 100 : Math.round(n);
+  return `${fmtINR(r)} (say "${hindiWords(r)} rupaye" in Hindi, "${englishWords(r)} rupees" in English)`;
+}
+
+/* =========================================================================
+   2. MOCK SELLERS
+   Gupta uses the brief's five metrics. Sharma and Raza are invented sellers
+   whose root causes are different, so the KAM has to diagnose from data.
+   ========================================================================= */
+const PROMOTIONS = [
+  { id:"weekend-value-sale", name:"Weekend Value Sale", rule:"Products must be at least 10% off during the sale (Friday to Sunday). Products whose price was raised in the 30 days before the sale cannot join (assumed rule)", uplift:0.25,
+    upliftNote:"Sellers who joined earlier saw about 25% more visits on those products (assumed)" }
+];
+const SELLERS = {
+  gupta: {
+    id:"gupta", shop:"Gupta Home & Kitchen", owner:"Rakesh Gupta", first:"Rakesh", city:"Kanpur", category:"Home and kitchen", tenure:"3 years on Snapdeal", language:"hinglish", asp:500,
+    fromBrief:true,
+    metrics:{ last:{ sales:200000, orders:400, cancelRate:0.08, oos:5, impressions:100000, visits:20000 },
+              now: { sales:135000, orders:270, cancelRate:0.14, oos:18, impressions:91000, visits:18200 } },
+    oosProducts:[
+      { id:"PC-3L", name:"Steel pressure cooker 3L", lastMonthOrders:22, newThisMonth:true, ghost:false, cancelledThisMonth:0 },
+      { id:"TW-28", name:"Non-stick tawa 28 cm", lastMonthOrders:16, newThisMonth:true, ghost:true, cancelledThisMonth:6 },
+      { id:"GJ-6",  name:"Glass storage jars, set of 6", lastMonthOrders:12, newThisMonth:true, ghost:false, cancelledThisMonth:0 },
+      { id:"WB-1L", name:"Steel water bottle 1L", lastMonthOrders:10, newThisMonth:true, ghost:true, cancelledThisMonth:5 },
+      { id:"VC-01", name:"Vegetable chopper", lastMonthOrders:9, newThisMonth:true, ghost:true, cancelledThisMonth:5 },
+      { id:"KT-6",  name:"Cotton kitchen towels, pack of 6", lastMonthOrders:8, newThisMonth:true, ghost:false, cancelledThisMonth:0 },
+      { id:"MD-07", name:"Masala dabba (spice box)", lastMonthOrders:7, newThisMonth:true, ghost:true, cancelledThisMonth:4 },
+      { id:"CB-02", name:"Chopping board", lastMonthOrders:6, newThisMonth:true, ghost:false, cancelledThisMonth:0 },
+      { id:"TF-3",  name:"Steel tiffin, 3 tier", lastMonthOrders:4, newThisMonth:true, ghost:true, cancelledThisMonth:3 },
+      { id:"SS-04", name:"Silicone spatula set", lastMonthOrders:3, newThisMonth:true, ghost:false, cancelledThisMonth:0 },
+      { id:"DR-01", name:"Dish drying rack", lastMonthOrders:2, newThisMonth:true, ghost:true, cancelledThisMonth:2 },
+      { id:"LB-01", name:"Insulated lunch bag", lastMonthOrders:2, newThisMonth:true, ghost:true, cancelledThisMonth:1 },
+      { id:"MC-05", name:"Measuring cups", lastMonthOrders:1, newThisMonth:true, ghost:false, cancelledThisMonth:0 },
+      { id:"CPB-1", name:"Copper water bottle", lastMonthOrders:0, newThisMonth:false, ghost:false, cancelledThisMonth:0 },
+      { id:"CM-4",  name:"Ceramic mug set", lastMonthOrders:1, newThisMonth:false, ghost:false, cancelledThisMonth:0 },
+      { id:"BD-12", name:"Brass diya set", lastMonthOrders:0, newThisMonth:false, ghost:false, cancelledThisMonth:0 },
+      { id:"ST-02", name:"Salt and pepper shakers", lastMonthOrders:0, newThisMonth:false, ghost:false, cancelledThisMonth:0 },
+      { id:"AP-01", name:"Cotton apron", lastMonthOrders:1, newThisMonth:false, ghost:false, cancelledThisMonth:0 }
+    ],
+    cancellations:{
+      last:{ total:35, seller:{ total:12, reasons:{ "Out of stock at packing":7, "Could not ship in time":5 } }, customer:{ total:23, reasons:{ "Delivery date too late":10, "Changed mind or ordered by mistake":13 } } },
+      now: { total:44, seller:{ total:31, reasons:{ "Out of stock at packing":26, "Could not ship in time":5 } }, customer:{ total:13, reasons:{ "Delivery date too late":7, "Changed mind or ordered by mistake":6 } } }
+    },
+    traffic:{ organic:{ last:100000, now:91000 }, ads:null, hidden:null,
+      note:"Assumed: a cancellation rate above 10% can lower a seller's search ranking." },
+    prices:[
+      { id:"PC-3L", name:"Steel pressure cooker 3L", price:899, lowestSimilar:879, ordersLast:22, ordersNow:4 },
+      { id:"TW-28", name:"Non-stick tawa 28 cm", price:449, lowestSimilar:439, ordersLast:16, ordersNow:3 },
+      { id:"GJ-6",  name:"Glass storage jars, set of 6", price:549, lowestSimilar:559, ordersLast:12, ordersNow:2 },
+      { id:"KS-12", name:"Kitchen knife set", price:399, lowestSimilar:389, ordersLast:30, ordersNow:29 },
+      { id:"SB-5",  name:"Steel bowls, set of 5", price:349, lowestSimilar:345, ordersLast:28, ordersNow:27 }
+    ],
+    priceNote:"No new low-priced competitors detected in these products this month (assumed)."
+  },
+  sharma: {
+    id:"sharma", shop:"Sharma Ethnic Wear", owner:"Sunita Sharma", first:"Sunita", city:"Jaipur", category:"Women's kurtis and ethnic wear", tenure:"2 years on Snapdeal", language:"hindi", asp:600,
+    metrics:{ last:{ sales:300000, orders:500, cancelRate:0.05, oos:2, impressions:120000, visits:25000 },
+              now: { sales:204000, orders:340, cancelRate:0.05, oos:2, impressions:116000, visits:24300 } },
+    oosProducts:[
+      { id:"SD-11", name:"Silk dupatta", lastMonthOrders:0, newThisMonth:false, ghost:false, cancelledThisMonth:0 },
+      { id:"EK-XL", name:"Embroidered kurti, XL", lastMonthOrders:1, newThisMonth:false, ghost:false, cancelledThisMonth:0 }
+    ],
+    cancellations:{
+      last:{ total:26, seller:{ total:4, reasons:{ "Out of stock at packing":2, "Could not ship in time":2 } }, customer:{ total:22, reasons:{ "Changed mind or ordered by mistake":14, "Found a lower price elsewhere":8 } } },
+      now: { total:18, seller:{ total:3, reasons:{ "Out of stock at packing":1, "Could not ship in time":2 } }, customer:{ total:15, reasons:{ "Changed mind or ordered by mistake":8, "Found a lower price elsewhere":7 } } }
+    },
+    traffic:{ organic:{ last:120000, now:116000 }, ads:null, hidden:null, note:"" },
+    prices:[
+      { id:"KR-01", name:"Cotton A-line kurti", price:649, lowestSimilar:499, ordersLast:140, ordersNow:80 },
+      { id:"KR-02", name:"Rayon printed kurti", price:599, lowestSimilar:479, ordersLast:120, ordersNow:70 },
+      { id:"KS-03", name:"Kurti and palazzo set", price:899, lowestSimilar:749, ordersLast:80, ordersNow:50 },
+      { id:"AK-04", name:"Anarkali kurti", price:799, lowestSimilar:789, ordersLast:60, ordersNow:58 },
+      { id:"DP-05", name:"Cotton dupatta", price:299, lowestSimilar:289, ordersLast:50, ordersNow:48 }
+    ],
+    priceNote:"Three new sellers listed similar kurtis at lower prices this month (assumed)."
+  },
+  raza: {
+    id:"raza", shop:"Raza Mobile Accessories", owner:"Imran Raza", first:"Imran", city:"Lucknow", category:"Phone covers, chargers and cables", tenure:"4 years on Snapdeal", language:"english", asp:300,
+    metrics:{ last:{ sales:156000, orders:520, cancelRate:0.06, oos:3, impressions:80000, visits:20000 },
+              now: { sales:102000, orders:340, cancelRate:0.06, oos:3, impressions:46000, visits:13100 } },
+    oosProducts:[
+      { id:"CB-C3", name:"Type-C cable 3 m", lastMonthOrders:2, newThisMonth:false, ghost:false, cancelledThisMonth:0 },
+      { id:"PB-20", name:"Power bank 20000 mAh", lastMonthOrders:1, newThisMonth:false, ghost:false, cancelledThisMonth:0 },
+      { id:"CH-65", name:"65 W charger", lastMonthOrders:0, newThisMonth:false, ghost:false, cancelledThisMonth:0 }
+    ],
+    cancellations:{
+      last:{ total:33, seller:{ total:5, reasons:{ "Out of stock at packing":2, "Could not ship in time":3 } }, customer:{ total:28, reasons:{ "Wrong phone model ordered":17, "Changed mind or ordered by mistake":11 } } },
+      now: { total:22, seller:{ total:3, reasons:{ "Out of stock at packing":1, "Could not ship in time":2 } }, customer:{ total:19, reasons:{ "Wrong phone model ordered":12, "Changed mind or ordered by mistake":7 } } }
+    },
+    traffic:{
+      organic:{ last:50000, now:37000 },
+      ads:{ campaign:"Phone accessories, always on", status:"Paused since day 9: the ads wallet ran out of balance",
+            last:{ spend:6000, impressions:30000, orders:78 }, now:{ spend:1800, impressions:9000, orders:23 } },
+      hidden:{ count:15, autoFixable:12, reason:"Missing 'compatible phone model' detail, which became mandatory in this month's catalogue update (assumed)",
+               ordersLast:110, ordersNow:30 },
+      note:""
+    },
+    prices:[
+      { id:"BC-A15", name:"Back cover for Galaxy A15", price:249, lowestSimilar:239, ordersLast:90, ordersNow:70 },
+      { id:"TG-14",  name:"Tempered glass for iPhone 14", price:199, lowestSimilar:199, ordersLast:85, ordersNow:60 },
+      { id:"CH-33",  name:"33 W fast charger", price:549, lowestSimilar:529, ordersLast:60, ordersNow:41 },
+      { id:"CB-C1",  name:"Type-C cable 1 m", price:179, lowestSimilar:169, ordersLast:70, ordersNow:50 },
+      { id:"EB-01",  name:"Wired earphones", price:299, lowestSimilar:289, ordersLast:40, ordersNow:28 }
+    ],
+    priceNote:"No new low-priced competitors detected in these products this month (assumed)."
+  }
+};
+
+/* =========================================================================
+   3. ANALYTICS ENGINE (plain code: does the maths, never the talking)
+   ========================================================================= */
+function analyse(s) {
+  const L = s.metrics.last, N = s.metrics.now;
+  const conv = m => Math.round(m.orders / m.visits * 1000) / 10;
+  const placedLast = Math.round(L.orders / (1 - L.cancelRate)), placedNow = Math.round(N.orders / (1 - N.cancelRate));
+  // Stock
+  const newlyOos = s.oosProducts.filter(p => p.newThisMonth).sort((a,b) => b.lastMonthOrders - a.lastMonthOrders);
+  const newlyOosOrders = newlyOos.reduce((t,p) => t + p.lastMonthOrders, 0);
+  const top5 = newlyOos.slice(0,5), top5Orders = top5.reduce((t,p) => t + p.lastMonthOrders, 0);
+  const ghosts = s.oosProducts.filter(p => p.ghost);
+  // Cancellations
+  const cancelRecoveryOrders = Math.max(0, Math.round(placedNow * (1 - Math.min(L.cancelRate, N.cancelRate))) - N.orders);
+  // Pricing: products priced 8% or more above the lowest similar listing
+  const priced = s.prices.map(p => {
+    const gapPct = Math.round((p.price - p.lowestSimilar) / p.lowestSimilar * 100);
+    const lost = Math.max(0, p.ordersLast - p.ordersNow);
+    const newPrice = Math.round(p.lowestSimilar * 1.05 / 10) * 10 - 1;
+    const recovered = Math.round(lost * 0.7);
+    const gain = (p.ordersNow + recovered) * newPrice - p.ordersNow * p.price;
+    const cutNeededPct = Math.round((p.price - newPrice) / p.price * 100);
+    return { ...p, gapPct, lost, newPrice, recovered, gain, cutNeededPct };
+  });
+  const gapProducts = priced.filter(p => p.gapPct >= 8).sort((a,b) => b.lost - a.lost);
+  // Visibility
+  const ads = s.traffic.ads, hidden = s.traffic.hidden;
+  const adsRoas = ads ? Math.round(ads.last.orders * s.asp / ads.last.spend * 10) / 10 : null;
+  const hiddenRecovery = hidden ? Math.round((hidden.ordersLast - hidden.ordersNow) * hidden.autoFixable / hidden.count) : 0;
+  return {
+    L, N, convLast:conv(L), convNow:conv(N), placedLast, placedNow,
+    salesChange:pctChange(L.sales, N.sales), ordersChange:pctChange(L.orders, N.orders), impressionsChange:pctChange(L.impressions, N.impressions),
+    newlyOos, newlyOosOrders, top5, top5Orders, ghosts, ghostCancels:ghosts.reduce((t,p) => t + p.cancelledThisMonth, 0),
+    cancelRecoveryOrders, priced, gapProducts, adsRoas, hiddenRecovery
+  };
+}
+/* A price change limited by what the seller can afford. Never goes below price × (1 − maxCut). */
+function pricePlan(g, maxCutPct) {
+  const floor = g.price * (1 - maxCutPct / 100);
+  let p = Math.max(g.newPrice, Math.round(floor / 10) * 10 - 1);
+  if (p < floor) p += 10;
+  p = Math.min(p, g.price);
+  const closed = g.price > g.newPrice ? (g.price - p) / (g.price - g.newPrice) : 0;
+  const recovered = Math.round(g.lost * 0.7 * Math.min(1, closed));
+  return { id:g.id, name:g.name, oldPrice:g.price, newPrice:p, cutPct:Math.round((g.price - p) / g.price * 100),
+    matchesCompetitors:closed >= 0.99, stillAboveLowestPct:Math.round((p - g.lowestSimilar) / g.lowestSimilar * 100),
+    recovered, gain:(g.ordersNow + recovered) * p - g.ordersNow * g.price };
+}
+
+/* Monitoring flags: which numbers moved enough to mention when the KAM calls first. */
+function monitoringFlags(s, a) {
+  const f = [];
+  if (a.salesChange <= -15) f.push(`sales down ${Math.abs(a.salesChange)} percent`);
+  if (a.N.cancelRate - a.L.cancelRate >= 0.03) f.push(`cancellations up to ${Math.round(a.N.cancelRate*100)} percent`);
+  if (a.N.oos - a.L.oos >= 5) f.push(`${a.N.oos} products out of stock`);
+  if (a.impressionsChange <= -20) f.push(`listing impressions down ${Math.abs(a.impressionsChange)} percent`);
+  if (a.convNow <= a.convLast * 0.8) f.push(`fewer visitors buying (conversion ${a.convLast} to ${a.convNow} per 100 visits)`);
+  return f;
+}
+
+/* =========================================================================
+   4. CALL HISTORY (kept in this browser) AND SIMULATED FOLLOW-UP RESULTS
+   ========================================================================= */
+const HISTORY_KEY = id => "virtual-kam:history:" + id;
+function loadHistory(id) { try { return JSON.parse(localStorage.getItem(HISTORY_KEY(id)) || "[]"); } catch { return memoryHistory[id] || []; } }
+function saveHistory(id, list) { memoryHistory[id] = list; try { localStorage.setItem(HISTORY_KEY(id), JSON.stringify(list)); } catch {} }
+const memoryHistory = {};
+const DAY = 86400000;
+/* How long after the last call the follow-up happens: what was agreed ("kal shaam" = next day), else a week. */
+function followUpGapDays(prev) {
+  const f = String(prev && prev.followUp || "").toLowerCase();
+  if (/\b(kal|tomorrow|कल)\b/.test(f) || f.includes("कल")) return 1;
+  if (/(parso|parson|day after|परसों)/.test(f)) return 2;
+  return 7;
+}
+const gapLabel = d => d === 1 ? "the next day" : d === 2 ? "two days later" : "one week later";
+const fmtDate = iso => new Date(iso).toLocaleDateString("en-IN", { weekday:"short", day:"numeric", month:"short" });
+
+/* What happened in the week after the last call, based on what was agreed. */
+function simulateProgress(s, a, rec) {
+  const gapDays = followUpGapDays(rec);
+  const items = []; let extraWeekly = 0;
+  const weekly = n => n / 4.3 * Math.min(1, gapDays / 7);
+  for (const act of rec.actions) {
+    const p = act.params || {};
+    switch (act.type) {
+      case "fix_listing_stock":
+        items.push({ title:"Stock corrected on listings", status:"working", result:`Cancellation rate since the last call is 8.5 percent, down from ${Math.round(a.N.cancelRate*100)} percent. No new cancellations from empty listings.` });
+        extraWeekly += weekly(a.cancelRecoveryOrders); break;
+      case "create_restock_plan": {
+        const picks = a.newlyOos.slice(0, p.top_n || 5);
+        const delayed = picks.length >= 3 ? picks[2] : null;
+        const done = picks.filter(x => x !== delayed);
+        const gained = done.reduce((t,x) => t + x.lastMonthOrders, 0);
+        items.push({ title:`Restock of ${picks.length} products`, status:delayed ? "partly" : "working",
+          result:`${done.length} of ${picks.length} restocked${p.restock_by ? " (seller had promised: " + p.restock_by + ")" : ""}. They brought about ${Math.round(weekly(gained)*0.9)} orders since then.` +
+                 (delayed ? ` ${delayed.name} is still out of stock: the supplier has not delivered.` : "") });
+        extraWeekly += weekly(gained) * 0.9; break; }
+      case "set_low_stock_alert": {
+        const lowItem = s.prices[s.prices.length - 1].name;
+        items.push({ title:"Low-stock alert", status:"attention", result:`The alert fired twice since the last call. ${lowItem} is down to 3 pieces and has not been reordered yet.` }); break; }
+      case "update_prices": {
+        const changed = a.gapProducts.filter(g => !p.product_ids || !p.product_ids.length || p.product_ids.includes(g.id));
+        const rec2 = p.recovered !== undefined ? p.recovered : changed.reduce((t,g) => t + g.recovered, 0);
+        const fullRec = changed.reduce((t,g) => t + g.recovered, 0) || 1, share = Math.min(1, rec2 / fullRec);
+        const extra = Math.max(1, Math.round(weekly(rec2)));
+        items.push({ title:`New prices on ${changed.length} products`, status:share < 0.6 ? "partly" : "working",
+          result:`Conversion on these products rose from ${a.convNow} to about ${Math.round((a.convNow + (a.convLast - a.convNow)*0.7*share)*10)/10} per 100 visits: about ${extra} extra order${extra > 1 ? "s" : ""} since then.` +
+                 (share < 0.6 ? " Prices are still well above the cheapest competitors, so most lost orders have not come back." : "") });
+        extraWeekly += weekly(rec2); break; }
+      case "join_promotion": {
+        const ids = p.product_ids || [], share = ids.length ? s.prices.filter(x => ids.includes(x.id)).reduce((t,x) => t + x.ordersNow, 0) / a.N.orders : 1;
+        const extra = Math.max(1, Math.round(a.N.orders / 4.3 * 0.25 * share));
+        items.push({ title:"Weekend Value Sale", status:"working", result:`The sale ran last weekend and brought about ${extra} extra orders.` });
+        extraWeekly += extra; break; }
+      case "fix_hidden_listings": {
+        const h = s.traffic.hidden;
+        items.push({ title:"Hidden listings fixed", status:"partly", result:`${h.autoFixable} of ${h.count} listings are live in search again. ${h.count - h.autoFixable} are still hidden: the seller has not sent the phone model details yet.` });
+        extraWeekly += weekly(a.hiddenRecovery); break; }
+      case "restart_ads_campaign": {
+        const budget = p.daily_budget || 200, spend = budget * gapDays, orders = Math.round(spend * a.adsRoas / s.asp);
+        items.push({ title:"Ads campaign restarted", status:"working", result:`Spent ${fmtINR(spend)} since the restart and got ${orders} orders from ads, worth about ${fmtINR(orders * s.asp)}.` });
+        extraWeekly += orders * 0.6; break; }
+    }
+  }
+  const weeklyBefore = Math.round(a.N.orders / 4.3 * Math.min(1, gapDays / 7));
+  return { items, gapDays, weeklyBefore, weeklyNow:Math.round(weeklyBefore + extraWeekly) };
+}
+
+/* =========================================================================
+   5. THE KAM'S INSTRUCTIONS (same for every seller; no answer baked in)
+   ========================================================================= */
+const VOICE_GENDER = { Kore:"female", Aoede:"female", Puck:"male", Charon:"male" };
+const LANG_RULES = {
+  hinglish:"Open the call in Hinglish: Hindi sentences with the common English words Indian shopkeepers use themselves (stock, order, cancel, sale, WhatsApp).",
+  hindi:"Open the call in simple, everyday Hindi.",
+  english:"Open the call in simple Indian English."
+};
+function buildSystemPrompt(ctx) {
+  const { s, a, language, prev, progress } = ctx;
+  const L = a.L, N = a.N;
+  const row = (label, x, y, chg) => `- ${label}: ${x} → ${y}${chg !== undefined ? ` (${chg > 0 ? "+" : ""}${chg}%)` : ""}`;
+  let p = `You are the Snapdeal Virtual Key Account Manager (KAM), on a live voice call with a seller. You own this seller's growth. You do not just answer questions: you find what is wrong, agree a plan, take the actions you can take yourself, and make sure the seller knows exactly what happens next. The company is Snapdeal; always say "Snapdeal" clearly.
+
+RULES THAT MATTER MOST
+A. Ask, then wait. When you ask permission ("Shall I do that?"), your turn ends there. Stop speaking and wait for the seller's answer. Never ask and act in the same turn, and never say something is done before the seller agrees and the tool confirms it. If a tool says the seller has not answered yet, simply wait in silence: do not apologise and do not mention it.
+B. Tools are silent. Using a tool is an action, not something you say. Never speak or write tool names, parameters, brackets or anything that looks like code.
+C. Never guess what you did not hear clearly. If a day, time, number or product name was unclear, ask again in a few words ("Maaf kijiye, kaun sa din?").
+C2. Listen and use the seller's own words. If the seller gives a date, a number or a preference ("2 din mein", "Monday shaam"), use exactly that, in your speech and in the tools. Never replace it with your own suggestion. If they have not given a day and time for a follow-up, ask for one.
+D. End with a spoken summary before goodbye, unless the seller says they do not want one. Say it once; never repeat yourself.
+E. Never say you did something unless a tool confirmed it in this call. If no tool can do what the seller asks, say you will pass it to the team and use escalate_to_human_kam.
+F. Explain before you suggest. Before proposing an action, give the evidence in one or two plain sentences with a number, for example "aapki teen kurtiyan naye sellers se 20 se 30 percent mehngi hain, isliye is mahine 140 orders kam aaye". Then propose the action and its rupee impact.
+
+YOUR VOICE
+${VOICE_GENDER[ctx.voice] === "female" ? 'You speak with a woman\'s voice. In Hindi always use feminine forms for yourself ("main bol rahi hoon", "main check karti hoon").' : 'You speak with a man\'s voice. In Hindi always use masculine forms for yourself ("main bol raha hoon", "main check karta hoon").'} Keep the same voice, pace and style for the whole call.
+
+THE SELLER
+${s.owner}, owner of ${s.shop}, ${s.city}. Category: ${s.category}. ${s.tenure}. Address them as "${s.first} ji".
+
+LANGUAGE AND PACE
+${LANG_RULES[language]} If the seller switches language, switch with them and stay there. If they ask for only Hindi, avoid English words for the rest of the call.
+Speak slowly and clearly, the way you would talk to a busy shopkeeper on a phone line: short sentences, a small pause between ideas, one idea per sentence.
+In Hindi, use everyday shopkeeper words ("maal", "piece", "bikri", "grahak"), never textbook words ("utpaad", "ikaai", "suvidha"). Avoid business jargon such as listing, threshold, ranking, conversion or impressions; describe the idea in plain words ("Snapdeal par kam log aapka saaman dekh rahe hain").
+Rupee amounts are given below with exact Hindi and English wording. Use that wording; never convert amounts yourself.
+
+ACCOUNT NUMBERS (last month → this month)
+${row("Sales", fmtINR(L.sales), fmtINR(N.sales), a.salesChange)} = ${speak(N.sales)} this month
+${row("Orders", L.orders, N.orders, a.ordersChange)}
+${row("Average selling price", fmtINR(s.asp), fmtINR(s.asp), 0)}
+${row("Cancellation rate", Math.round(L.cancelRate*100) + "%", Math.round(N.cancelRate*100) + "%")}
+${row("Out-of-stock products", L.oos, N.oos)}
+${row("Listing impressions (how often shoppers see the products)", fmtNum(L.impressions), fmtNum(N.impressions), a.impressionsChange)}
+${row("Conversion (orders per 100 visits)", a.convLast, a.convNow)}
+
+HOW TO DIAGNOSE
+There are four possible causes on the seller's screen: stockouts, cancellations, pricing and visibility. Treat each as a hypothesis.
+- First work out where orders are being lost: fewer shoppers seeing the products (impressions), fewer of them buying (conversion), or orders lost after purchase (cancellations).
+- An unchanged average price only means the seller did not change prices. It says nothing about competitors. Check get_price_comparison before ruling pricing in or out.
+- Falling conversion with steady impressions points at what shoppers see on the product page: price against competitors, products out of stock, or ratings.
+- Falling impressions points at visibility: ads stopped, products hidden from search, or ranking pushed down.
+- Check with the data tools before confirming anything. Use update_diagnosis as each cause is suspected, confirmed or ruled out, with one short line of evidence. All four must be marked before you close the call.
+- Ask the seller what only they know: why something changed (supplier, cash, competitors, ads balance), what they can afford, their margin, and when they can act.
+
+ACTIONS YOU CAN TAKE (only after the seller agrees; the tools tell you if an action does not apply to this seller)
+- fix_listing_stock: set stock to zero on products that show stock the seller does not have. Stops new cancellations.
+- create_restock_plan: restock the products that sold most before running out. If cash is tight, suggest only the top 5.
+- set_low_stock_alert: a WhatsApp alert, plus a note in the seller panel, when a product falls to a few pieces.
+- Price cuts and sale discounts add up on the same product. Together they must leave the seller a profit. Let the tools do this maths: if the seller suggests a different combination, try it with the tools rather than refusing from memory, and if a tool refuses, explain its exact reason. Suggest the smallest cut that helps, and describe the result exactly: if a product will still cost more than the cheapest competitor, say so.
+- update_prices: lower prices on overpriced products. Ask their margin first and pass a max_cut_percent that leaves them a profit. Never suggest a cut larger than their margin. If the margin cannot cover the gap to competitors, say so honestly and offer what is possible: a small cut on the best seller only, pushing the products where they are already competitive, a combo offer (for example kurti with dupatta), or asking their supplier for a better rate.
+- join_promotion: add products to a Snapdeal sale event.
+- fix_hidden_listings: fill in missing product details so hidden products show in search again.
+- restart_ads_campaign: restart a paused ads campaign at a daily budget the seller chooses.
+- schedule_follow_up, escalate_to_human_kam, send_whatsapp_summary, log_call_report, end_call.
+Recommend two or three actions, biggest rupee impact first. For each, say in one sentence what it does and roughly how much it brings back per month, then ask and wait (rule A).`;
+
+  if (prev) {
+    p += `
+
+YOUR LAST CALL WITH THIS SELLER (${fmtDate(prev.simulatedAt)})
+- Causes confirmed: ${Object.entries(prev.diagnosis).filter(([,v]) => v.status === "confirmed").map(([k,v]) => k + " (" + v.evidence + ")").join("; ") || "none"}
+- Actions taken: ${prev.actions.map(x => x.title).join("; ") || "none"}
+- Seller's commitments: ${(prev.report && prev.report.seller_commitments || []).join("; ") || prev.actions.filter(x => x.params && x.params.restock_by).map(x => "restock by " + x.params.restock_by).join("; ") || "none recorded"}
+- Follow-up promised: ${prev.followUp || "not set"}${prev.margin ? `
+- The seller's margin is ${prev.margin}% (they told you last time). Do not ask again unless they say it has changed.` : ""}${prev.productCuts && Object.keys(prev.productCuts).length ? `
+- Price cuts now live: ${Object.entries(prev.productCuts).map(([id, c]) => { const x = s.prices.find(p => p.id === id); return (x ? x.name : id) + " " + c + "% lower"; }).join("; ")}. Any sale discount from last time has ended. A new cut on a product replaces its current cut.` : ""}`;
+  }
+  if (progress) {
+    p += `
+
+WHAT HAPPENED SINCE (this call is ${gapLabel(progress.gapDays)}${prev.followUp ? ", at the follow-up time agreed: " + prev.followUp : ""})
+${progress.items.length ? `- Orders since the last call: about ${progress.weeklyNow}, against about ${progress.weeklyBefore} in the same length of time before it.` : "- No actions were taken in the last call, so there are no results to check. Pick up where the last call stopped."}
+${progress.items.map(i => `- ${i.title} [${i.status === "working" ? "working" : i.status === "partly" ? "partly done" : "needs attention"}]: ${i.result}`).join("\n")}
+
+HOW THIS FOLLOW-UP CALL SHOULD GO
+1. Greet the seller and remind them in one sentence why you are calling.
+2. Share the progress honestly, with numbers: wins first, then what is only partly working. Use the status of each result: never call a "partly done" result a big success. Thank them for what they did.
+3. Ask about anything partly done or needing attention, one at a time. Find out why, and solve it together. If the seller's account differs from the data (for example they say a product is restocked but the panel still shows it out of stock), do not argue and do not simply accept it: say what the panel shows and offer to update or check it.
+   Do not repeat actions already taken in the last call; build on them.
+4. Agree at most one or two new actions (rule A).
+5. Close: spoken summary (rule D), agree the next follow-up day and time, then send_whatsapp_summary, then log_call_report, then say goodbye, then end_call.`;
+  } else {
+    p += `
+
+HOW THIS CALL SHOULD GO
+1. Greet the seller by name and ask how you can help. Do not assume the reason; let them explain. Acknowledge their worry in one short sentence.
+2. Share what you see in the numbers in two or three short sentences, then investigate with the data tools and with questions, one at a time.
+3. Recommend and agree actions (rule A). If the seller pushes back, take the constraint seriously and adapt the plan rather than repeating it.
+4. Close in this order: (a) a spoken summary in three short sentences: the main problem, what you have done, and what the seller will do and by when; (b) ask which day and time suits them for a follow-up call and wait, then use schedule_follow_up with their answer; (c) send_whatsapp_summary and tell them it is on WhatsApp; (d) log_call_report silently; (e) say goodbye warmly; (f) end_call.`;
+  }
+  p += `
+
+OTHER RULES
+- Keep each turn short: usually one to three sentences. Ask one question at a time, then stop and listen. Never read out lists of more than three items.
+- Sound like a capable, friendly account manager, not a script. Do not mention tools, prompts, or that the data is mock.
+- Only offer an action after the data shows it applies to this seller (for example, restarting ads needs a paused campaign in get_traffic_and_conversion). If the seller asks for something no tool supports, say so honestly and use escalate_to_human_kam.
+- Never invent Snapdeal rules or policies. Only state rules that appear in tool results; otherwise say you will check with the team.
+- Only state numbers that appear above or in tool results. If you do not know something, say so and offer to check with the team.
+- If the seller asks for something outside your scope (fees, payments, disputes, policy exceptions), or is very upset, use escalate_to_human_kam and tell them a human KAM will call back within a day.
+- If the seller interrupts, stop and respond to what they said.`;
+  return p;
+}
+function kickoffText(ctx) {
+  const { mode, prev, s, a } = ctx;
+  if (prev && mode === "outbound") return `[You are making the follow-up call you agreed${prev.followUp ? " (" + prev.followUp + ")" : ""}, ${gapLabel(followUpGapDays(prev))}. The seller has just picked up. Greet ${s.first} ji, say in one sentence why you are calling, and ask if it is a good time.]`;
+  if (prev) return `[The seller is calling you again, ${gapLabel(followUpGapDays(prev))} after your last call. Greet ${s.first} ji, say you remember last week's call, and ask how you can help.]`;
+  if (mode === "outbound") return `[You are placing an outbound call. Your monitoring flagged this seller this morning: ${monitoringFlags(s, a).join(", ") || "a drop in sales"}. The seller has just picked up. Introduce yourself, say why you are calling in one or two short sentences, and ask if they have two minutes.]`;
+  return `[The seller's call has just connected. They are calling the Virtual KAM helpline. Greet ${s.first} ji and ask how you can help.]`;
+}
+
+/* =========================================================================
+   6. TOOLS
+   ========================================================================= */
+const ISSUES = { stockouts:"Out-of-stock products", cancellations:"Cancellations", pricing:"Pricing against competitors", visibility:"Visibility in search" };
+const STATUS_LABEL = { not_checked:"Not checked", suspected:"Suspected", confirmed:"Confirmed", ruled_out:"Ruled out" };
+const obj = (properties = {}, required = []) => ({ type:"object", properties, required });
+const TOOL_DEFS = [
+  { name:"get_out_of_stock_products", description:"Out-of-stock products with last month's orders, whether they ran out this month, and whether the listing still wrongly shows stock.", parameters:obj() },
+  { name:"get_cancellation_breakdown", description:"Cancellations this month and last month, split into seller-cancelled and customer-cancelled, with reasons.", parameters:obj() },
+  { name:"get_traffic_and_conversion", description:"How often shoppers see the products (impressions, organic and ads), visits, conversion, ads campaign status, and products hidden from search.", parameters:obj() },
+  { name:"get_price_comparison", description:"The seller's top products: their price, the lowest price of similar products on Snapdeal, and orders last month and this month.", parameters:obj() },
+  { name:"update_diagnosis", description:"Update the seller's on-screen diagnosis board. Use whenever a cause is suspected, confirmed or ruled out.",
+    parameters:obj({ issue:{ type:"string", enum:Object.keys(ISSUES) }, status:{ type:"string", enum:["suspected","confirmed","ruled_out"] },
+      evidence:{ type:"string", description:"One short line of evidence, under 15 words, in English" } }, ["issue","status","evidence"]) },
+  { name:"fix_listing_stock", description:"Set stock to zero on products whose listing shows stock the seller does not have. Only after the seller agrees.", parameters:obj() },
+  { name:"create_restock_plan", description:"Restock plan for the products that ran out this month, ordered by lost orders. Only after the seller agrees. Call again to update it.",
+    parameters:obj({ top_n:{ type:"integer", description:"How many products, 1 to 13. Use 5 if cash is tight." },
+      restock_by:{ type:"string", description:"When the seller said they can restock, in their own words" } }, ["top_n"]) },
+  { name:"mark_products_out_of_stock", description:"Mark named products as out of stock so customers cannot order them. Only after the seller agrees.",
+    parameters:obj({ product_names:{ type:"array", items:{ type:"string" }, description:"Product names as the seller or the data called them" } }, ["product_names"]) },
+  { name:"set_low_stock_alert", description:"WhatsApp alert plus a seller panel note when any product falls to the threshold. Only after the seller agrees.",
+    parameters:obj({ threshold_pieces:{ type:"integer", description:"Pieces left that trigger the alert, usually 5" } }, ["threshold_pieces"]) },
+  { name:"update_prices", description:"Lower prices on overpriced products, never by more than max_cut_percent. Only after the seller has told you their margin and agreed to the cut.",
+    parameters:obj({ product_ids:{ type:"array", items:{ type:"string" }, description:"Product ids from get_price_comparison; leave empty for all overpriced products" },
+      max_cut_percent:{ type:"integer", description:"The largest cut that still leaves the seller a profit. With a 10 percent margin, use about 4 or 5." },
+      seller_margin_percent:{ type:"integer", description:"The margin the seller told you" } }, ["max_cut_percent","seller_margin_percent"]) },
+  { name:"join_promotion", description:"Add chosen products to a Snapdeal sale event. Only after the seller agrees, and only if the discount still leaves them a profit.",
+    parameters:obj({ promotion_id:{ type:"string", enum:PROMOTIONS.map(x => x.id) }, discount_percent:{ type:"integer" },
+      product_ids:{ type:"array", items:{ type:"string" }, description:"Product ids from get_price_comparison" },
+      seller_margin_percent:{ type:"integer", description:"The margin the seller told you" } }, ["promotion_id","discount_percent","product_ids","seller_margin_percent"]) },
+  { name:"fix_hidden_listings", description:"Fill in missing required details on products hidden from search, so they show again. Only after the seller agrees.", parameters:obj() },
+  { name:"restart_ads_campaign", description:"Restart a paused ads campaign at the daily budget the seller chose. Only after the seller agrees to top up their ads balance.",
+    parameters:obj({ daily_budget:{ type:"integer", description:"Rupees per day, as the seller said" } }, ["daily_budget"]) },
+  { name:"schedule_follow_up", description:"Book a follow-up call at the day and time the seller chose.",
+    parameters:obj({ when:{ type:"string", description:"The seller's chosen day and time, in their words" }, purpose:{ type:"string" } }, ["when","purpose"]) },
+  { name:"escalate_to_human_kam", description:"Hand over to a human account manager for anything outside your scope, or if the seller is very upset.", parameters:obj({ reason:{ type:"string" } }, ["reason"]) },
+  { name:"send_whatsapp_summary", description:"Send the seller a WhatsApp summary of the call, in English. Once, near the end.",
+    parameters:obj({ key_issue:{ type:"string" }, actions:{ type:"array", items:{ type:"string" } }, next_steps:{ type:"array", items:{ type:"string" }, description:"Who does what by when" } }, ["key_issue","actions","next_steps"]) },
+  { name:"log_call_report", description:"Silently file the call report for the human KAM team, after the WhatsApp summary and before goodbye. Write in English.",
+    parameters:obj({
+      outcome:{ type:"string", enum:["plan_agreed","partly_agreed","no_agreement","escalated"] },
+      seller_mood:{ type:"string", enum:["positive","calm","worried","frustrated"] },
+      main_concerns:{ type:"array", items:{ type:"string" }, description:"What the seller cared about most, in their terms" },
+      seller_commitments:{ type:"array", items:{ type:"string" }, description:"What the seller promised to do, with their dates" },
+      risks:{ type:"array", items:{ type:"string" }, description:"What could stop the plan working" },
+      next_best_action:{ type:"string", description:"One recommendation for the human KAM team" } },
+      ["outcome","seller_mood","main_concerns","seller_commitments","risks","next_best_action"]) },
+  { name:"end_call", description:"Hang up, after you have said goodbye.", parameters:obj() }
+];
+const CONSENT_TOOLS = new Set(["mark_products_out_of_stock","fix_listing_stock","create_restock_plan","set_low_stock_alert","update_prices","join_promotion","fix_hidden_listings","restart_ads_campaign","schedule_follow_up"]);
+
+/* Guards: rules enforced in code, because instructions alone were not reliable in testing. */
+const consent = { kamAskedAt:0, sellerSpokeAt:0, voiceFrames:0 };
+function consentGuard() {
+  if (consent.kamAskedAt > consent.sellerSpokeAt) return { __hold:true };
+  return null;
+}
+/* Held actions: the tool call stays unanswered, so the KAM has nothing to react to and stays quiet.
+   When the seller replies, the KAM receives their exact words and decides what to do. */
+const held = { calls:[], sellerText:"", timer:null, timeout:null, sock:null };
+function holdCall(sock, fc) {
+  if (!held.calls.length) { held.sellerText = ""; logEvent("Waiting for the seller’s answer before acting"); }
+  held.calls.push(fc); held.sock = sock;
+  clearTimeout(held.timeout);
+  held.timeout = setTimeout(() => releaseHeld("no_answer"), 25000);
+}
+function noteSellerSpeech(text) {
+  if (!held.calls.length) return;
+  held.sellerText += text;
+  clearTimeout(held.timer);
+  held.timer = setTimeout(() => releaseHeld("answered"), 1300);   // wait for the seller to finish their sentence
+}
+function releaseHeld(why) {
+  clearTimeout(held.timer); clearTimeout(held.timeout);
+  if (!held.calls.length) return;
+  const calls = held.calls, sock = held.sock, said = held.sellerText.trim();
+  held.calls = []; held.sellerText = "";
+  const result = why === "answered"
+    ? { done:false, seller_reply:said, instruction:"Not done yet, because you asked the seller first. Their reply is above. If they clearly agreed, use this tool again now and then confirm briefly. If they said no or asked something, respond to that. Do not repeat your earlier question." }
+    : { done:false, instruction:"The seller has not answered. Ask once more, very briefly, in different words." };
+  if (sock && sock.readyState === 1) sock.send(JSON.stringify({ toolResponse:{ functionResponses:calls.map(fc => ({ id:fc.id, name:fc.name, response:{ result } })) } }));
+}
+function dropHeld(ids) {
+  held.calls = held.calls.filter(fc => !ids || !ids.includes(fc.id));
+  if (!held.calls.length) { clearTimeout(held.timer); clearTimeout(held.timeout); }
+}
+function closingGuard(tool) {
+  const missing = [];
+  const unmarked = Object.keys(ISSUES).filter(k => CALL.board[k].status === "not_checked");
+  if (unmarked.length) missing.push(`mark these causes on the board with update_diagnosis (check the data first if needed): ${unmarked.join(", ")}`);
+  if (tool === "end_call") {
+    if (!CALL.whatsapp) missing.push("send_whatsapp_summary");
+    if (!CALL.report) missing.push("log_call_report");
+  }
+  if (!missing.length) return null;
+  logEvent("Closing checklist: finishing missing steps");
+  return { error:"Not done yet. Silently do these first, without speaking: " + missing.join("; ") + ". Do not repeat anything you already said to the seller. Then continue." };
+}
+/* Keeps at least 2 points of margin on every product, counting price cuts and sale discounts together. */
+function marginCheck(marginPct, changes, kind) {
+  const m = Number(marginPct) || CALL.margin;
+  if (!m || m <= 0) return { error:"Ask the seller their margin first and pass it as seller_margin_percent." };
+  CALL.margin = m;
+  const over = [];
+  for (const [id, value] of Object.entries(changes)) {
+    // The new value replaces this product's earlier price cut (kind "cut") or earlier sale discount (kind "promo").
+    const cut = kind === "cut" ? value : (CALL.productCuts[id] || 0);
+    const promo = kind === "promo" ? value : (CALL.promoDiscount[id] || 0);
+    const total = cut + promo;
+    if (total > m - 2) over.push({ id, total, cut, promo });
+  }
+  if (!over.length) return null;
+  const names = over.map(o => { const p = CTX.s.prices.find(x => x.id === o.id); return `${p ? p.name : o.id} (price cut ${o.cut}% + sale discount ${o.promo}% = ${o.total}%)`; });
+  return { error:`Not done: this leaves less than 2 percent profit on ${names.join(", ")}, because the seller's margin is ${m}%. Explain this exact sum to the seller. Options: a smaller price cut (a new cut replaces the earlier one on the same product, so you can call update_prices again with a lower max_cut_percent), leaving these products out of the sale, or another way to compete.` };
+}
+function notApplicable(why) { return { error:"This action does not apply to this seller: " + why + ". Do not offer it." }; }
+
+const TOOL_HANDLERS = {
+  get_out_of_stock_products() {
+    const { s, a } = CTX; logEvent("Checked out-of-stock products");
+    return { products:s.oosProducts.map(p => ({ id:p.id, name:p.name, orders_last_month:p.lastMonthOrders, ran_out_this_month:p.newThisMonth, listing_still_shows_stock:p.ghost, cancelled_orders_this_month:p.cancelledThisMonth })),
+      summary:{ out_of_stock_total:s.oosProducts.length, ran_out_this_month:a.newlyOos.length, their_orders_last_month:a.newlyOosOrders, value_per_month:speak(a.newlyOosOrders * s.asp),
+        top_5_orders_last_month:a.top5Orders, top_5_value_per_month:speak(a.top5Orders * s.asp), listings_wrongly_showing_stock:a.ghosts.length, cancellations_from_them:a.ghostCancels } };
+  },
+  get_cancellation_breakdown() {
+    const { s, a } = CTX; logEvent("Checked why orders were cancelled");
+    return { this_month:s.cancellations.now, last_month:s.cancellations.last, placed_orders:{ last_month:a.placedLast, this_month:a.placedNow },
+      if_rate_returned_to_last_month:{ extra_orders_per_month:a.cancelRecoveryOrders, value_per_month:speak(a.cancelRecoveryOrders * s.asp) } };
+  },
+  get_traffic_and_conversion() {
+    const { s, a } = CTX, t = s.traffic; logEvent("Checked how many shoppers see the products");
+    const out = { impressions:{ last_month:a.L.impressions, this_month:a.N.impressions, change_percent:a.impressionsChange },
+      organic_impressions:t.organic, visits:{ last_month:a.L.visits, this_month:a.N.visits }, conversion_per_100_visits:{ last_month:a.convLast, this_month:a.convNow },
+      ads:t.ads ? { ...t.ads, return_per_rupee_last_month:a.adsRoas } : "No ads running in either month",
+      hidden_from_search:t.hidden ? { ...t.hidden, can_fix_automatically:t.hidden.autoFixable, orders_recoverable_per_month:a.hiddenRecovery, value_per_month:speak(a.hiddenRecovery * s.asp) } : "No products hidden from search" };
+    if (t.note) out.note = t.note;
+    return out;
+  },
+  get_price_comparison() {
+    const { s, a } = CTX; logEvent("Compared prices with similar products");
+    return { products:a.priced.map(p => ({ id:p.id, name:p.name, price:p.price, lowest_similar_price:p.lowestSimilar, gap_percent:p.gapPct, orders_last_month:p.ordersLast, orders_this_month:p.ordersNow })),
+      note:s.priceNote,
+      overpriced_products: a.gapProducts.length ? a.gapProducts.map(g => ({ id:g.id, name:g.name, price:g.price, lowest_similar_price:g.lowestSimilar,
+          price_cut_needed_to_compete:`${fmtINR(g.price - g.newPrice)} (${g.cutNeededPct} percent)`, orders_lost_this_month:g.lost })) : "No product is priced more than 8 percent above similar products",
+      pricing_note: a.gapProducts.length ? `Matching competitors needs price cuts of ${Math.min(...a.gapProducts.map(g => g.cutNeededPct))} to ${Math.max(...a.gapProducts.map(g => g.cutNeededPct))} percent. Ask the seller's margin before suggesting any cut. A cut must never be larger than their margin.` : undefined,
+      promotions_open:PROMOTIONS.map(x => ({ id:x.id, name:x.name, rule:x.rule, effect:x.upliftNote })) };
+  },
+  update_diagnosis({ issue, status, evidence }) {
+    const key = normaliseIssue(issue);
+    if (!key) return { error:"Unknown issue. Use one of: " + Object.keys(ISSUES).join(", ") };
+    if (!STATUS_LABEL[status] || status === "not_checked") return { error:"Unknown status. Use suspected, confirmed or ruled_out." };
+    setHypothesis(key, status, evidence); return { ok:true };
+  },
+  fix_listing_stock() {
+    const { a } = CTX; if (!a.ghosts.length) return notApplicable("no listing shows stock the seller does not have");
+    const names = a.ghosts.map(p => p.name);
+    addAction("fix_listing_stock", {}, { title:`Stock corrected on ${names.length} listings`, body:`Set to zero: ${names.slice(0,3).join(", ")}${names.length > 3 ? ` and ${names.length-3} more` : ""}.`,
+      impact:`Stops about ${a.ghostCancels} cancellations a month`, status:"done", label:"Done" });
+    return { ok:true, listings_updated:names.length, expected_effect:`About ${a.ghostCancels} fewer cancellations a month` };
+  },
+  create_restock_plan({ top_n = 5, restock_by }) {
+    const { s, a } = CTX; if (!a.newlyOos.length) return notApplicable("no products ran out of stock this month");
+    const n = Math.max(1, Math.min(a.newlyOos.length, Math.round(Number(top_n) || 5)));
+    const picks = a.newlyOos.slice(0, n), orders = picks.reduce((t,p) => t + p.lastMonthOrders, 0);
+    const share = Math.round(orders / a.newlyOosOrders * 100);
+    addAction("create_restock_plan", { top_n:n, restock_by }, { title:`Restock plan: top ${n} product${n > 1 ? "s" : ""}`,
+      body:`${picks.slice(0,3).map(p => p.name).join(", ")}${n > 3 ? ` and ${n-3} more` : ""}.${restock_by ? ` Seller restocks: ${restock_by}.` : ""}`,
+      impact:`Recovers about ${fmtINR(orders * s.asp)} a month (${share}% of lost orders)`, status:"waiting", label:"Seller to restock" }, "create_restock_plan");
+    return { ok:true, products:picks.map(p => p.name), value_per_month:speak(orders * s.asp), share_of_lost_orders_percent:share, restock_by:restock_by || "not agreed yet: ask the seller" };
+  },
+  mark_products_out_of_stock({ product_names = [] }) {
+    const { s } = CTX;
+    const all = [...s.oosProducts, ...s.prices].map(p => p.name);
+    const words = x => String(x).toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w.length > 2);
+    const matched = [], unknown = [];
+    for (const want of product_names) {
+      const ws = words(want);
+      const hit = all.find(n => ws.length && ws.every(w => words(n).some(x => x.startsWith(w) || w.startsWith(x))))
+               || all.find(n => ws.some(w => words(n).includes(w)));
+      if (hit && !matched.includes(hit)) matched.push(hit); else if (!hit) unknown.push(want);
+    }
+    if (!matched.length) return { error:"No matching products. Ask the seller which product they mean.", unknown };
+    addAction("mark_products_out_of_stock", { product_names:matched }, { title:`Marked out of stock: ${matched.length} product${matched.length > 1 ? "s" : ""}`, body:matched.join(", ") + ".", status:"done", label:"Done" });
+    return { ok:true, marked_out_of_stock:matched, not_found:unknown };
+  },
+  set_low_stock_alert({ threshold_pieces = 5 }) {
+    const t = Math.max(1, Math.round(Number(threshold_pieces) || 5));
+    addAction("set_low_stock_alert", { threshold_pieces:t }, { title:"Low-stock alert turned on", body:`WhatsApp alert and a seller panel note when any product falls to ${t} pieces.`, impact:"Prevents the next stock-out", status:"done", label:"Done" });
+    return { ok:true, threshold_pieces:t, alert_goes_to:"The seller's registered WhatsApp number, plus a note in the Snapdeal seller panel" };
+  },
+  update_prices({ product_ids = [], max_cut_percent, seller_margin_percent }) {
+    const { a } = CTX; if (!a.gapProducts.length) return notApplicable("no product is priced well above similar products");
+    const maxCut = Number(max_cut_percent);
+    if (!maxCut || maxCut <= 0) return { error:"Ask the seller's margin first, then pass max_cut_percent: a cut that still leaves them a profit." };
+    const chosen = a.gapProducts.filter(g => !product_ids.length || product_ids.includes(g.id));
+    if (!chosen.length) return { error:"Unknown product ids. Use ids from get_price_comparison." };
+    const plans = chosen.map(g => pricePlan(g, Math.min(maxCut, 40)));
+    const blocked = marginCheck(seller_margin_percent, Object.fromEntries(plans.map(x => [x.id, x.cutPct])), "cut");
+    if (blocked) return blocked;
+    const replaced = plans.some(x => CALL.productCuts[x.id] !== undefined);
+    plans.forEach(x => CALL.productCuts[x.id] = x.cutPct);
+    const gain = plans.reduce((t,x) => t + x.gain, 0), recovered = plans.reduce((t,x) => t + x.recovered, 0);
+    addAction("update_prices", { product_ids:plans.map(x => x.id), max_cut_percent:maxCut, recovered }, { title:`New prices on ${plans.length} product${plans.length > 1 ? "s" : ""} (max ${maxCut}% cut)`,
+      body:plans.map(x => `${x.name}: ${fmtINR(x.oldPrice)} → ${fmtINR(x.newPrice)}`).join("; "), impact:`About ${fmtINR(gain)} more sales a month`, status:"done", label:"Done" }, "update_prices");
+    return { ok:true, changes:plans.map(x => ({ name:x.name, old_price:x.oldPrice, new_price:x.newPrice, cut_percent:x.cutPct,
+        still_above_lowest_competitor_percent:x.stillAboveLowestPct, matches_competitors:x.matchesCompetitors })),
+      orders_won_back_per_month:recovered, extra_sales_per_month:speak(gain),
+      replaced_earlier_price_change:replaced ? "Yes. It had not gone live yet, so revising it is allowed and is not a price rise." : "No",
+      note:plans.some(x => !x.matchesCompetitors) ? "These prices are still above the cheapest competitors, so expect a partial recovery. Tell the seller this honestly and suggest other ways to compete." : "Prices now within about 5 percent of the cheapest competitors." };
+  },
+  join_promotion({ promotion_id, discount_percent, product_ids = [], seller_margin_percent }) {
+    const { s, a } = CTX; const promo = PROMOTIONS.find(x => x.id === promotion_id);
+    if (!promo) return { error:"Unknown promotion." };
+    const d = Number(discount_percent) || 0;
+    if (d < 10) return { error:"This sale needs at least 10 percent off. Ask the seller if they can offer that." };
+    const chosen = s.prices.filter(p => product_ids.includes(p.id));
+    if (!chosen.length) return { error:"Choose products using ids from get_price_comparison." };
+    const blocked = marginCheck(seller_margin_percent, Object.fromEntries(chosen.map(p => [p.id, d])), "promo");
+    if (blocked) return blocked;
+    chosen.forEach(p => CALL.promoDiscount[p.id] = d);
+    const share = chosen.reduce((t,p) => t + p.ordersNow, 0) / a.N.orders;
+    const extra = Math.max(1, Math.round(a.N.orders / 4.3 * promo.uplift * share));
+    addAction("join_promotion", { promotion_id, discount_percent:d, product_ids }, { title:`Joined ${promo.name}`, body:`${d}% off on ${chosen.map(p => p.name).join(", ")}, Friday to Sunday.`, impact:`About ${extra} extra orders over the weekend`, status:"scheduled", label:"Scheduled" });
+    return { ok:true, extra_orders_expected:extra };
+  },
+  fix_hidden_listings() {
+    const { s, a } = CTX, h = s.traffic.hidden; if (!h) return notApplicable("no products are hidden from search");
+    addAction("fix_hidden_listings", {}, { title:`${h.autoFixable} hidden products fixed`, body:`Missing details filled from product titles. ${h.count - h.autoFixable} more need the phone model from the seller on WhatsApp.`,
+      impact:`Recovers about ${fmtINR(a.hiddenRecovery * s.asp)} a month`, status:"done", label:"Done" });
+    return { ok:true, fixed:h.autoFixable, still_need_seller_input:h.count - h.autoFixable, value_per_month:speak(a.hiddenRecovery * s.asp) };
+  },
+  restart_ads_campaign({ daily_budget }) {
+    const { s, a } = CTX, ads = s.traffic.ads; if (!ads) return notApplicable("this seller has no ads campaign");
+    const b = Math.max(50, Math.round(Number(daily_budget) || 0)); if (!daily_budget) return { error:"Ask the seller for a daily budget first." };
+    const monthlySpend = b * 30, orders = Math.round(monthlySpend * a.adsRoas / s.asp);
+    addAction("restart_ads_campaign", { daily_budget:b }, { title:"Ads campaign restarted", body:`${ads.campaign}: ${fmtINR(b)} a day once the ads balance is topped up.`,
+      impact:`About ${orders} orders a month from ads (${fmtINR(orders * s.asp)})`, status:"waiting", label:"Seller to top up" });
+    return { ok:true, monthly_spend:speak(monthlySpend), orders_per_month_expected:orders, sales_per_month_expected:speak(orders * s.asp), note:"Live once the seller tops up the ads balance" };
+  },
+  schedule_follow_up({ when, purpose }) {
+    CALL.followUp = when;
+    addAction("schedule_follow_up", { when }, { title:`Follow-up call: ${when}`, body:purpose || "Check progress on the plan.", status:"scheduled", label:"Scheduled" }, "schedule_follow_up");
+    return { ok:true, when };
+  },
+  escalate_to_human_kam({ reason }) {
+    CALL.escalations.push(reason);
+    addAction("escalate_to_human_kam", { reason }, { title:"Handed to a human KAM", body:reason, impact:"Callback within 24 hours", status:"escalated", label:"Escalated" });
+    return { ok:true, callback:"within 24 hours" };
+  },
+  send_whatsapp_summary({ key_issue, actions = [], next_steps = [] }) {
+    CALL.whatsapp = { key_issue, actions, next_steps }; renderWhatsApp(key_issue, actions, next_steps);
+    return { ok:true, sent_to:CTX.s.owner };
+  },
+  log_call_report(r) {
+    if (!OUTCOME[r.outcome]) r.outcome = CALL.escalations.length ? "escalated" : CALL.actions.some(x => x.type !== "schedule_follow_up") ? "plan_agreed" : "no_agreement";
+    if (r.outcome === "escalated" && !CALL.escalations.length) TOOL_HANDLERS.escalate_to_human_kam({ reason:r.next_best_action || "Seller needs help beyond the Virtual KAM" });
+    CALL.report = r; logEvent("Call report filed for the KAM team"); return { ok:true }; },
+  end_call() { pendingHangup = true; maybeHangUp(); return { ok:true }; }
+};
+async function runTool(name, args) {
+  const fn = TOOL_HANDLERS[name]; if (!fn) return { error:"Unknown tool " + name };
+  if (CONSENT_TOOLS.has(name)) { const w = consentGuard(); if (w) return w; }
+  if (name === "send_whatsapp_summary" || name === "end_call") { const w = closingGuard(name); if (w) return w; }
+  return await fn(args || {});
+}
+function normaliseIssue(issue) {
+  const t = String(issue || "").toLowerCase();
+  if (t.startsWith("stock") || t.includes("out_of_stock") || t.includes("inventory")) return "stockouts";
+  if (t.startsWith("cancel")) return "cancellations";
+  if (t.startsWith("pric")) return "pricing";
+  if (t.startsWith("visib") || t.includes("rank") || t.includes("traffic") || t.includes("search")) return "visibility";
+  return null;
+}
+
+/* =========================================================================
+   7. SCREEN
+   ========================================================================= */
+let CTX = null;                   // current seller, analysis, mode, history
+let CALL = null;                  // state of the call in progress
+function newCallState() {
+  return { board:Object.fromEntries(Object.keys(ISSUES).map(k => [k, { status:"not_checked", evidence:"" }])),
+    actions:[], margin:null, productCuts:{}, promoDiscount:{}, followUp:null, escalations:[], whatsapp:null, report:null, turns:[], startedAt:0, connected:false };
+}
+function currentSeller() { return SELLERS[$("sellerSel").value]; }
+
+function renderSeller() {
+  const s = currentSeller(), a = analyse(s), hist = loadHistory(s.id), prev = hist[hist.length - 1] || null;
+  $("sellerName").textContent = s.shop;
+  $("sellerMeta").textContent = `${s.owner}, ${s.city}. ${s.category}.`;
+  const L = a.L, N = a.N, worse = (x, y, up) => up ? y > x * 1.05 : y < x * 0.95;
+  const rows = [
+    ["Sales", fmtINR(L.sales), fmtINR(N.sales), worse(L.sales, N.sales)],
+    ["Orders", fmtNum(L.orders), fmtNum(N.orders), worse(L.orders, N.orders)],
+    ["Cancellation rate", Math.round(L.cancelRate*100) + "%", Math.round(N.cancelRate*100) + "%", worse(L.cancelRate, N.cancelRate, true)],
+    ["Avg selling price", fmtINR(s.asp), fmtINR(s.asp), false],
+    ["Out-of-stock products", L.oos, N.oos, worse(L.oos, N.oos, true)],
+    ["Listing impressions", fmtNum(L.impressions), fmtNum(N.impressions), worse(L.impressions, N.impressions)],
+    ["Orders per 100 visits", a.convLast.toFixed(1), a.convNow.toFixed(1), worse(a.convLast, a.convNow)]
+  ];
+  $("metricsTable").querySelector("tbody").innerHTML = rows.map(([k,x,y,bad]) => `<tr><td>${k}</td><td>${x}</td><td class="${bad ? "delta-bad" : "delta-flat"}">${y}</td></tr>`).join("");
+  $("metricsFoot").textContent = s.fromBrief ? "The first five rows are from the assignment brief. The last two are assumed." : "Invented seller, to test the KAM on a different problem.";
+  $("langSel").value = s.language;
+  CTX = { s, a, prev, mode:null, language:s.language, progress:prev ? simulateProgress(s, a, prev) : null };
+  CALL = newCallState();
+  if (prev) {
+    Object.assign(CALL.board, JSON.parse(JSON.stringify(prev.diagnosis)));
+    if (prev.margin) CALL.margin = prev.margin;
+    if (prev.productCuts) CALL.productCuts = { ...prev.productCuts };
+  }
+  renderBoard(); renderProgress(); resetCallArea();
+  $("outboundBtn").textContent = prev ? "KAM’s follow-up call" : "Let the KAM call you";
+  const banner = $("followBanner");
+  if (prev) { banner.hidden = false; banner.textContent = `Follow-up mode: the next call is simulated ${gapLabel(followUpGapDays(prev))} after the last call (${fmtDate(prev.simulatedAt)}), at the follow-up time agreed. Clear this seller’s call history to start over.`; }
+  else banner.hidden = true;
+  $("reportBtn").hidden = !prev;
+}
+function renderBoard() {
+  const board = $("diagBoard"); board.innerHTML = `<div class="diag-intro">The KAM updates this as it investigates during the call.</div>`;
+  const a = CTX.a, s = CTX.s;
+  const initial = { stockouts:`${a.L.oos} → ${a.N.oos} products out of stock`, cancellations:`${Math.round(a.L.cancelRate*100)}% → ${Math.round(a.N.cancelRate*100)}% of orders cancelled`,
+    pricing:`Avg price ${fmtINR(s.asp)} → ${fmtINR(s.asp)}; competitors not checked`, visibility:`Impressions ${fmtNum(a.L.impressions)} → ${fmtNum(a.N.impressions)}` };
+  for (const k of Object.keys(ISSUES)) {
+    const st = CALL.board[k], el = document.createElement("div");
+    el.className = "hyp"; el.id = "hyp-" + k; el.dataset.status = st.status;
+    el.innerHTML = `<div class="hyp-top"><span class="hyp-name"></span><span class="pill"></span></div><div class="hyp-ev"></div>`;
+    el.querySelector(".hyp-name").textContent = ISSUES[k];
+    el.querySelector(".pill").textContent = STATUS_LABEL[st.status];
+    el.querySelector(".hyp-ev").textContent = st.evidence || initial[k];
+    board.appendChild(el);
+  }
+}
+function setHypothesis(key, status, evidence) {
+  CALL.board[key] = { status, evidence:evidence || CALL.board[key].evidence };
+  const el = $("hyp-" + key); if (!el) return;
+  el.dataset.status = status; el.querySelector(".pill").textContent = STATUS_LABEL[status];
+  if (evidence) el.querySelector(".hyp-ev").textContent = evidence;
+  el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+}
+function renderProgress() {
+  const box = $("progress"); box.innerHTML = "";
+  const pr = CTX.progress;
+  if (!pr) return;
+  box.innerHTML = `<div class="subhead">Since the last call (${gapLabel(pr.gapDays)}, simulated). Read this before the call: the KAM sees the same results.</div>` +
+    (pr.items.length ? `<div class="week num">Orders since then <b>${pr.weeklyNow}</b> <span class="muted">vs about ${pr.weeklyBefore} in the same time before</span></div>`
+                     : `<div class="week">No actions were taken last call, so there are no results to check yet.</div>`);
+  const labels = { working:"Working", partly:"Partly done", attention:"Needs attention" };
+  for (const it of pr.items) {
+    const el = document.createElement("div"); el.className = "act";
+    el.innerHTML = `<div class="act-top"><span class="act-title"></span><span class="pill ${it.status}"></span></div><div class="act-body"></div>`;
+    el.querySelector(".act-title").textContent = it.title; el.querySelector(".pill").textContent = labels[it.status]; el.querySelector(".act-body").textContent = it.result;
+    box.appendChild(el);
+  }
+}
+function resetCallArea() {
+  $("plan").innerHTML = `<div class="plan-empty" id="planEmpty">Actions the KAM takes during the call appear here, with their expected impact.</div>`;
+  if (CTX.progress) $("plan").insertAdjacentHTML("afterbegin", `<div class="subhead">This call</div>`);
+  $("planCount").textContent = ""; $("waSlot").innerHTML = "";
+  const t = $("transcript"); t.innerHTML = ""; currentTurn = null;
+  const s = CTX.s;
+  const local = !location.protocol.startsWith("http") ? `<p>Running as a local file: add your Gemini API key in Settings first.</p>` : "";
+  t.innerHTML = CTX.prev
+    ? `<div class="empty" id="emptyState"><h3>Follow-up with ${s.first}</h3><p>The KAM remembers the last call and knows what happened since. Let it call ${s.first} to check progress, or call it as ${s.first}.</p>${local}</div>`
+    : `<div class="empty" id="emptyState"><h3>Talk to your Virtual KAM</h3><p>You’re ${s.owner}. Press “Call the KAM” and explain that your sales dropped this month.</p><p>Or let the KAM call you first, the way it would when its monitoring spots a problem.</p>${local}</div>`;
+}
+function addAction(type, params, card, replaceType) {
+  const empty = $("planEmpty"); if (empty) empty.remove();
+  CALL.actions = CALL.actions.filter(x => !(replaceType && x.type === replaceType));
+  CALL.actions.push({ type, params, title:card.title });
+  if (replaceType) { const old = $("plan").querySelector(`[data-type="${replaceType}"]`); if (old) old.remove(); }
+  const el = document.createElement("div"); el.className = "act"; el.dataset.type = type;
+  el.innerHTML = `<div class="act-top"><span class="act-title"></span><span class="pill ${card.status}"></span></div><div class="act-body"></div>${card.impact ? `<div class="act-impact"></div>` : ""}`;
+  el.querySelector(".act-title").textContent = card.title; el.querySelector(".pill").textContent = card.label;
+  el.querySelector(".act-body").textContent = card.body || ""; if (card.impact) el.querySelector(".act-impact").textContent = card.impact;
+  $("plan").appendChild(el);
+  const n = $("plan").querySelectorAll(".act").length; $("planCount").textContent = `${n} action${n > 1 ? "s" : ""}`;
+  el.scrollIntoView({ block:"nearest", behavior:"smooth" });
+}
+function renderWhatsApp(keyIssue, actions, nextSteps) {
+  const s = CTX.s;
+  const text = [`Namaste ${s.first} ji, here is the summary of today’s call with your Snapdeal Virtual KAM.`, "", `Main issue: ${keyIssue}`, "",
+    "Actions:", ...actions.map(x => `• ${x}`), "", "Next steps:", ...nextSteps.map(x => `• ${x}`)].join("\n");
+  const box = document.createElement("div"); box.className = "wa";
+  box.innerHTML = `<div class="wa-head">WhatsApp summary sent to ${s.owner}</div><div class="wa-msg"></div><a target="_blank" rel="noopener">Send to WhatsApp</a>`;
+  box.querySelector(".wa-msg").textContent = text; box.querySelector("a").href = "https://wa.me/?text=" + encodeURIComponent(text);
+  $("waSlot").innerHTML = ""; $("waSlot").appendChild(box); box.scrollIntoView({ block:"nearest", behavior:"smooth" });
+}
+
+let currentTurn = null;
+const TOOL_NAME_RE = new RegExp("\\b(" + TOOL_DEFS.map(t => t.name).join("|") + ")\\s*\\([^)]*\\)?", "g");
+function cleanKamText(raw) {
+  return raw.replace(/\*+\s*calling tool\s*\*+/gi, "").replace(/`[^`]*`/g, "").replace(/`[^`]*$/, "").replace(TOOL_NAME_RE, "").replace(/[ \t]{2,}/g, " ");
+}
+function appendTranscript(role, text) {
+  if (!text) return;
+  if (role === "seller") { consent.sellerSpokeAt = Date.now(); noteSellerSpeech(text); }
+  if (role === "kam" && /[?？]/.test(text)) consent.kamAskedAt = Date.now();
+  const t = $("transcript"); const empty = $("emptyState"); if (empty) empty.remove();
+  if (!currentTurn || currentTurn.role !== role) {
+    const el = document.createElement("div"); el.className = "turn " + role;
+    el.innerHTML = `<span class="who"></span><span class="txt"></span>`;
+    el.querySelector(".who").textContent = role === "kam" ? "Virtual KAM" : `${CTX.s.first} (seller)`;
+    t.appendChild(el);
+    currentTurn = { role, el, txt:el.querySelector(".txt"), raw:"" };
+    CALL.turns.push(currentTurn);
+  }
+  currentTurn.raw += text;
+  currentTurn.txt.textContent = role === "kam" ? cleanKamText(currentTurn.raw) : currentTurn.raw;
+  t.scrollTop = t.scrollHeight;
+}
+function logEvent(text, isError = false) {
+  const t = $("transcript"); const empty = $("emptyState"); if (empty) empty.remove();
+  const el = document.createElement("div"); el.className = "event" + (isError ? " err" : ""); el.textContent = text;
+  t.appendChild(el); t.scrollTop = t.scrollHeight; currentTurn = null;
+}
+function setStatus(state, text) { $("status").dataset.state = state; $("statusText").textContent = text; }
+
+/* =========================================================================
+   8. CALL RECORDS AND THE REPORT FOR THE HUMAN TEAM
+   ========================================================================= */
+function saveCallRecord() {
+  if (!CALL || !CALL.connected) return null;
+  const durationSec = Math.round((Date.now() - CALL.startedAt) / 1000);
+  if (durationSec < 15 && !CALL.actions.length) return null;
+  const s = CTX.s, hist = loadHistory(s.id), prev = hist[hist.length - 1];
+  const rec = {
+    at:new Date().toISOString(), simulatedAt:prev ? new Date(new Date(prev.simulatedAt).getTime() + followUpGapDays(prev) * DAY).toISOString() : new Date().toISOString(),
+    type:prev ? "Follow-up call" : CTX.mode === "outbound" ? "KAM called the seller" : "Seller called the KAM",
+    durationSec, language:CTX.language, diagnosis:JSON.parse(JSON.stringify(CALL.board)), actions:CALL.actions, followUp:CALL.followUp,
+    margin:CALL.margin, productCuts:{ ...CALL.productCuts },
+    escalations:CALL.escalations, whatsapp:CALL.whatsapp, report:CALL.report, progress:CTX.progress,
+    transcript:CALL.turns.map(t => ({ role:t.role, text:t.role === "kam" ? cleanKamText(t.raw).trim() : t.raw.trim() }))
+  };
+  hist.push(rec); saveHistory(s.id, hist);
+  return rec;
+}
+const LANG_NAME = { hinglish:"Hinglish", hindi:"Hindi", english:"English" };
+const OUTCOME = { plan_agreed:"Plan agreed", partly_agreed:"Partly agreed", no_agreement:"No agreement", escalated:"Escalated to a human KAM" };
+function reportText(s, rec) {
+  const r = rec.report || {}, lines = [];
+  lines.push(`CALL REPORT: ${s.shop} (${s.owner}, ${s.city})`, `${rec.type}, ${fmtDate(rec.simulatedAt)}, ${Math.floor(rec.durationSec/60)} min ${rec.durationSec%60} s, language: ${LANG_NAME[rec.language] || rec.language}`);
+  lines.push(`Outcome: ${OUTCOME[r.outcome] || "Not recorded"}. Seller mood: ${r.seller_mood || "not recorded"}.`, "");
+  lines.push("Diagnosis:"); for (const [k,v] of Object.entries(rec.diagnosis)) lines.push(`- ${ISSUES[k]}: ${STATUS_LABEL[v.status]}${v.evidence ? " (" + v.evidence + ")" : ""}`);
+  lines.push("", "Actions taken:", ...(rec.actions.length ? rec.actions.map(x => "- " + x.title) : ["- None"]));
+  lines.push("", "Seller commitments:", ...((r.seller_commitments || []).length ? r.seller_commitments.map(x => "- " + x) : ["- None recorded"]));
+  lines.push("", "Seller's main concerns:", ...((r.main_concerns || []).length ? r.main_concerns.map(x => "- " + x) : ["- Not recorded"]));
+  lines.push("", "Risks:", ...((r.risks || []).length ? r.risks.map(x => "- " + x) : ["- Not recorded"]));
+  lines.push("", `Follow-up: ${rec.followUp || "not scheduled"}`, `Escalations: ${rec.escalations.length ? rec.escalations.join("; ") : "none"}`);
+  lines.push(`Next best action for the KAM team: ${r.next_best_action || "not recorded"}`);
+  return lines.join("\n");
+}
+let reportShown = null;
+function showReport(rec) {
+  const s = CTX.s, r = rec.report || {}; reportShown = rec;
+  $("reportTitle").textContent = `Call report: ${s.shop}`;
+  const esc = x => String(x).replace(/[&<>"]/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]));
+  const list = (arr, empty) => arr && arr.length ? `<ul>${arr.map(x => `<li>${esc(x)}</li>`).join("")}</ul>` : `<p class="muted">${empty}</p>`;
+  $("reportBody").innerHTML = `
+    <dl class="kv">
+      <dt>Call</dt><dd>${esc(rec.type)}, ${fmtDate(rec.simulatedAt)}, ${Math.floor(rec.durationSec/60)} min ${rec.durationSec%60} s</dd>
+      <dt>Language</dt><dd>${esc(LANG_NAME[rec.language] || rec.language)}</dd>
+      <dt>Outcome</dt><dd>${esc(OUTCOME[r.outcome] || (rec.report ? "Not recorded" : "Call ended before the KAM filed its report"))}</dd>
+      <dt>Seller mood</dt><dd>${esc(r.seller_mood || "Not recorded")}</dd>
+      <dt>Follow-up</dt><dd>${esc(rec.followUp || "Not scheduled")}</dd>
+    </dl>
+    <h4>Diagnosis</h4>${list(Object.entries(rec.diagnosis).map(([k,v]) => `${ISSUES[k]}: ${STATUS_LABEL[v.status]}${v.evidence ? " (" + v.evidence + ")" : ""}`), "")}
+    <h4>Actions taken</h4>${list(rec.actions.map(x => x.title), "None")}
+    <h4>Seller commitments</h4>${list(r.seller_commitments, "None recorded")}
+    <h4>Seller’s main concerns</h4>${list(r.main_concerns, "Not recorded")}
+    <h4>Risks</h4>${list(r.risks, "Not recorded")}
+    <h4>Next best action for the KAM team</h4><p>${esc(r.next_best_action || "Not recorded")}</p>
+    ${rec.escalations.length ? `<h4>Escalations</h4>${list(rec.escalations, "")}` : ""}`;
+  $("reportDlg").showModal();
+}
+function showHistory() {
+  const s = CTX.s, hist = loadHistory(s.id);
+  $("historyTitle").textContent = `Call history: ${s.shop}`;
+  const body = $("historyBody"); body.innerHTML = "";
+  if (!hist.length) { body.innerHTML = `<p class="muted">No calls yet with this seller.</p>`; }
+  hist.slice().reverse().forEach(rec => {
+    const el = document.createElement("div"); el.className = "hist-item";
+    el.innerHTML = `<div><b></b><div class="muted"></div></div><button class="btn">View report</button>`;
+    el.querySelector("b").textContent = `${rec.type}, ${fmtDate(rec.simulatedAt)}`;
+    el.querySelector(".muted").textContent = `${rec.actions.length} actions. ${OUTCOME[rec.report && rec.report.outcome] || "Outcome not recorded"}.`;
+    el.querySelector("button").onclick = () => { $("historyDlg").close(); showReport(rec); };
+    body.appendChild(el);
+  });
+  $("historyDlg").showModal();
+}
+
+/* =========================================================================
+   9. AUDIO: mic capture at 16 kHz, playback at 24 kHz (AudioWorklets)
+   ========================================================================= */
+const CAPTURE_WORKLET = `
+class Capture extends AudioWorkletProcessor {
+  constructor(){ super(); this.buf = new Float32Array(512); this.i = 0; }
+  process(inputs){
+    const ch = inputs[0] && inputs[0][0];
+    if (ch) for (let k = 0; k < ch.length; k++) {
+      this.buf[this.i++] = ch[k];
+      if (this.i === this.buf.length) { this.port.postMessage(this.buf.slice()); this.i = 0; }
+    }
+    return true;
+  }
+}
+registerProcessor("capture", Capture);`;
+const PLAYBACK_WORKLET = `
+class Playback extends AudioWorkletProcessor {
+  constructor(){ super(); this.q = []; this.off = 0; this.playing = false; this.n = 0; this.acc = 0;
+    this.port.onmessage = e => { if (e.data === "flush") { this.q = []; this.off = 0; } else this.q.push(e.data); }; }
+  process(_, outputs){
+    const out = outputs[0][0]; let o = 0;
+    while (o < out.length && this.q.length) {
+      const b = this.q[0]; const c = Math.min(out.length - o, b.length - this.off);
+      for (let k = 0; k < c; k++) { const v = b[this.off++]; out[o++] = v; this.acc += v * v; }
+      if (this.off >= b.length) { this.q.shift(); this.off = 0; }
+    }
+    for (; o < out.length; o++) out[o] = 0;
+    const has = this.q.length > 0;
+    if (has && !this.playing) { this.playing = true; this.port.postMessage({ t:"start" }); }
+    if (!has && this.playing) { this.playing = false; this.port.postMessage({ t:"drained" }); }
+    if (++this.n % 8 === 0) { this.port.postMessage({ t:"level", v:Math.sqrt(this.acc / (out.length * 8)) }); this.acc = 0; }
+    return true;
+  }
+}
+registerProcessor("playback", Playback);`;
+// data: URLs (not blob:) so the audio worklets also load when the page is opened as a local file.
+const workletURL = src => "data:application/javascript;base64," + btoa(src);
+
+const audio = { micCtx:null, micStream:null, micNode:null, outCtx:null, outNode:null, speaking:false, onChunk:null };
+
+// Called synchronously inside the click, so the browser lets the page play sound.
+function createOutputContext() { audio.outCtx = new AudioContext({ sampleRate:24000 }); audio.outCtx.resume(); }
+
+async function prepareAudio() {
+  // Ask for the microphone first, so the permission prompt appears before the call connects.
+  audio.micStream = await navigator.mediaDevices.getUserMedia({ audio:{ echoCancellation:true, noiseSuppression:true, autoGainControl:true, channelCount:1 } });
+  await audio.outCtx.audioWorklet.addModule(workletURL(PLAYBACK_WORKLET));
+  audio.outNode = new AudioWorkletNode(audio.outCtx, "playback");
+  audio.outNode.connect(audio.outCtx.destination);
+  audio.outNode.port.onmessage = e => {
+    const m = e.data;
+    if (m.t === "level") $("kamLevel").style.width = Math.min(100, m.v * 400) + "%";
+    else if (m.t === "start") audio.speaking = true;
+    else if (m.t === "drained") { audio.speaking = false; $("kamLevel").style.width = "0%"; maybeHangUp(); }
+  };
+  audio.micCtx = new AudioContext({ sampleRate:16000 });
+  await audio.micCtx.audioWorklet.addModule(workletURL(CAPTURE_WORKLET));
+  audio.micNode = new AudioWorkletNode(audio.micCtx, "capture");
+  audio.micCtx.createMediaStreamSource(audio.micStream).connect(audio.micNode);
+  audio.micNode.port.onmessage = e => {
+    const f32 = e.data; let sum = 0;
+    const i16 = new Int16Array(f32.length);
+    for (let k = 0; k < f32.length; k++) { const s = Math.max(-1, Math.min(1, f32[k])); i16[k] = s < 0 ? s * 0x8000 : s * 0x7fff; sum += s * s; }
+    const rms = Math.sqrt(sum / f32.length);
+    $("micLevel").style.width = Math.min(100, rms * 500) + "%";
+    consent.voiceFrames = rms > 0.03 ? consent.voiceFrames + 1 : 0;
+    if (consent.voiceFrames >= 4) consent.sellerSpokeAt = Date.now();   // about 130 ms of clear speech
+    if (audio.onChunk) audio.onChunk(bytesToBase64(new Uint8Array(i16.buffer)));
+  };
+  await audio.micCtx.resume(); await audio.outCtx.resume();
+}
+function playPCM(b64) {
+  const bytes = base64ToBytes(b64);
+  const i16 = new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength >> 1);
+  const f32 = new Float32Array(i16.length);
+  for (let k = 0; k < i16.length; k++) f32[k] = i16[k] / 32768;
+  audio.outNode && audio.outNode.port.postMessage(f32);
+}
+function flushPlayback() { audio.outNode && audio.outNode.port.postMessage("flush"); }
+function stopAudio() {
+  audio.onChunk = null;
+  try { audio.micStream && audio.micStream.getTracks().forEach(t => t.stop()); } catch {}
+  try { audio.micCtx && audio.micCtx.close(); } catch {}
+  try { audio.outCtx && audio.outCtx.close(); } catch {}
+  Object.assign(audio, { micCtx:null, micStream:null, micNode:null, outCtx:null, outNode:null, speaking:false });
+  $("micLevel").style.width = "0%"; $("kamLevel").style.width = "0%";
+}
+function bytesToBase64(bytes) { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s); }
+function base64ToBytes(b64) { const s = atob(b64); const out = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i); return out; }
+
+/* =========================================================================
+   10. GEMINI LIVE SESSION (raw WebSocket)
+   ========================================================================= */
+const WS_BASE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.";
+let callSeq = 0, ws = null, pendingHangup = false, hangupTimer = null, timerId = null, turnOpen = false;
+
+async function getAuthUrl() {
+  let serverError = "";
+  if (location.protocol.startsWith("http")) {
+    try {
+      const r = await fetch("/api/token", { method:"POST" });
+      const body = await r.json().catch(() => ({}));
+      if (r.ok && body.token) return WS_BASE + "BidiGenerateContentConstrained?access_token=" + encodeURIComponent(body.token);
+      if (body.error) serverError = body.error;
+    } catch {}
+  }
+  const key = $("keyInput").value.trim();
+  if (key) return WS_BASE + "BidiGenerateContent?key=" + encodeURIComponent(key);
+  throw new Error(serverError || "No API access. Deploy with the server function, or add a Gemini API key in Settings for local testing.");
+}
+
+async function startCall(mode) {
+  const my = ++callSeq;
+  createOutputContext();
+  renderSeller();                                  // fresh board, progress and history for this seller
+  CTX.mode = mode; CTX.language = $("langSel").value; CTX.voice = $("voiceSel").value;
+  pendingHangup = false; turnOpen = false;
+  Object.assign(consent, { kamAskedAt:0, sellerSpokeAt:0, voiceFrames:0 });
+  setStatus("connecting", "Connecting…"); toggleButtons(true);
+
+  let url;
+  try { await prepareAudio(); }
+  catch (e) { if (my === callSeq) failCall("Microphone unavailable: " + e.message + ". Allow microphone access and try again."); return; }
+  if (my !== callSeq) return;
+  try { url = await getAuthUrl(); }
+  catch (e) { if (my === callSeq) failCall(e.message); return; }
+  if (my !== callSeq) return;
+
+  const model = $("modelSel").value, isLegacy = !model.startsWith("gemini-3.8");
+  const sock = new WebSocket(url); ws = sock;
+
+  sock.onopen = () => {
+    const tools = TOOL_DEFS.map(t => isLegacy ? t : { ...t, behavior:"BLOCKING" });
+    sock.send(JSON.stringify({ setup:{
+      model:"models/" + model,
+      generationConfig:{ responseModalities:["AUDIO"], speechConfig:{ voiceConfig:{ prebuiltVoiceConfig:{ voiceName:$("voiceSel").value } } } },
+      systemInstruction:{ parts:[{ text:buildSystemPrompt(CTX) }] },
+      tools:[{ functionDeclarations:tools }],
+      inputAudioTranscription:{}, outputAudioTranscription:{},
+      realtimeInputConfig:{ automaticActivityDetection:{ silenceDurationMs:1000, prefixPaddingMs:300 } }
+    }}));
+  };
+
+  sock.onmessage = async ev => {
+    if (ws !== sock) return;
+    const raw = ev.data instanceof Blob ? await ev.data.text() : ev.data;
+    let msg; try { msg = JSON.parse(raw); } catch { return; }
+    if (msg.setupComplete) {
+      audio.onChunk = b64 => { if (sock.readyState === 1) sock.send(JSON.stringify({ realtimeInput:{ audio:{ data:b64, mimeType:"audio/pcm;rate=16000" } } })); };
+      CALL.connected = true; CALL.startedAt = Date.now();
+      setStatus("live", CTX.prev ? "On call (follow-up)" : mode === "outbound" ? "On call (KAM called you)" : "On call");
+      timerId = setInterval(tick, 1000); tick();
+      const kick = kickoffText(CTX);
+      sock.send(JSON.stringify(isLegacy ? { realtimeInput:{ text:kick } } : { clientContent:{ turns:[{ role:"user", parts:[{ text:kick }] }], turnComplete:true } }));
+      return;
+    }
+    if (msg.toolCall) { await handleToolCall(sock, msg.toolCall); return; }
+    if (msg.toolCallCancellation) { dropHeld(msg.toolCallCancellation.ids); return; }
+    if (msg.goAway) logEvent("The call will end soon (session time limit)");
+    const sc = msg.serverContent; if (!sc) return;
+    if (sc.interrupted) { flushPlayback(); if (currentTurn && currentTurn.role === "kam") currentTurn.el.classList.add("interrupted"); currentTurn = null; }
+    if (sc.inputTranscription && sc.inputTranscription.text) appendTranscript("seller", sc.inputTranscription.text);
+    if (sc.modelTurn && sc.modelTurn.parts) for (const p of sc.modelTurn.parts) if (p.inlineData && p.inlineData.data) { turnOpen = true; playPCM(p.inlineData.data); }
+    if (sc.outputTranscription && sc.outputTranscription.text) appendTranscript("kam", sc.outputTranscription.text);
+    if (sc.turnComplete) { turnOpen = false; maybeHangUp(); }
+  };
+
+  sock.onclose = ev => {
+    if (ws !== sock) return;
+    if (pendingHangup) { endCall(); return; }
+    const reason = ev.reason || (ev.code !== 1000 ? "code " + ev.code : "");
+    failCall("The call disconnected" + (reason ? ": " + reason : "") + ". " + explainClose(ev));
+  };
+}
+function explainClose(ev) {
+  const r = (ev.reason || "").toLowerCase();
+  if (r.includes("quota") || r.includes("rate") || r.includes("exhausted") || r.includes("billing") || r.includes("prepay")) return "The API key hit a usage or billing limit. Wait a minute, try the other model in Settings, or check billing.";
+  if (r.includes("not found") || r.includes("not supported") || r.includes("model")) return "Try the other model in Settings.";
+  if (r.includes("key") || r.includes("auth") || r.includes("permission") || r.includes("token")) return "Check the API key.";
+  return "";
+}
+async function handleToolCall(sock, toolCall) {
+  const responses = [];
+  for (const fc of toolCall.functionCalls || []) {
+    let result; try { result = await runTool(fc.name, fc.args); } catch (e) { result = { error:e.message }; }
+    if (result && result.__hold) { holdCall(sock, fc); continue; }
+    responses.push({ id:fc.id, name:fc.name, response:{ result } });
+  }
+  if (responses.length && sock.readyState === 1) sock.send(JSON.stringify({ toolResponse:{ functionResponses:responses } }));
+}
+function maybeHangUp() {
+  if (!pendingHangup) return;
+  if (!hangupTimer) hangupTimer = setTimeout(() => { if (pendingHangup) endCall(); }, 10000);
+  setTimeout(() => { if (pendingHangup && !audio.speaking && !turnOpen) endCall(); }, 800);
+}
+function closeSession() {
+  dropHeld(); held.sock = null;
+  callSeq++; pendingHangup = false; clearTimeout(hangupTimer); hangupTimer = null;
+  const sock = ws; ws = null; try { sock && sock.close(1000); } catch {}
+  stopAudio(); clearInterval(timerId); toggleButtons(false);
+  const rec = saveCallRecord();
+  if (rec) {
+    $("reportBtn").hidden = false;
+    setTimeout(() => showReport(rec), 1200);
+  }
+  return rec;
+}
+function endCall() {
+  if ($("endBtn").hidden) return;
+  closeSession(); setStatus("idle", "Call ended"); logEvent("Call ended");
+  refreshAfterCall();
+}
+function failCall(message) {
+  closeSession(); setStatus("error", "Call failed"); logEvent(message, true);
+  refreshAfterCall();
+}
+/* After a call, the next one for this seller becomes a follow-up. Update labels without wiping the finished call from screen. */
+function refreshAfterCall() {
+  const s = CTX.s, hist = loadHistory(s.id), prev = hist[hist.length - 1] || null;
+  if (!prev) return;
+  $("outboundBtn").textContent = "KAM’s follow-up call";
+  const banner = $("followBanner"); banner.hidden = false;
+  banner.textContent = `Call saved. The next call with ${s.first} is simulated ${gapLabel(followUpGapDays(prev))}, at the follow-up time agreed, so the KAM can check progress. Clear this seller’s call history to start over.`;
+}
+function tick() { const sec = Math.floor((Date.now() - CALL.startedAt) / 1000); $("timer").textContent = `${Math.floor(sec/60)}:${String(sec%60).padStart(2,"0")}`; }
+function toggleButtons(onCall) {
+  $("inboundBtn").hidden = onCall; $("outboundBtn").hidden = onCall; $("endBtn").hidden = !onCall;
+  $("sellerSel").disabled = onCall; $("langSel").disabled = onCall; $("clearHistoryBtn").disabled = onCall;
+  if (onCall) $("reportBtn").hidden = true;
+}
+
+/* =========================================================================
+   11. WIRING
+   ========================================================================= */
+for (const s of Object.values(SELLERS)) {
+  const o = document.createElement("option"); o.value = s.id; o.textContent = `${s.shop}${s.fromBrief ? " (brief data)" : ""}`;
+  $("sellerSel").appendChild(o);
+}
+$("sellerSel").onchange = () => { $("timer").textContent = ""; setStatus("idle", "Ready"); renderSeller(); };
+$("inboundBtn").onclick = () => startCall("inbound");
+$("outboundBtn").onclick = () => startCall("outbound");
+$("endBtn").onclick = () => endCall();
+$("reportBtn").onclick = () => { const h = loadHistory(CTX.s.id); if (h.length) showReport(h[h.length - 1]); };
+$("historyBtn").onclick = () => showHistory();
+$("aboutBtn").onclick = () => $("aboutDlg").showModal();
+$("settingsBtn").onclick = () => $("settingsDlg").showModal();
+$("clearHistoryBtn").onclick = () => { saveHistory(CTX.s.id, []); try { localStorage.removeItem(HISTORY_KEY(CTX.s.id)); } catch {}; $("historyDlg").close(); $("timer").textContent = ""; setStatus("idle", "Ready"); renderSeller(); };
+$("copyReportBtn").onclick = async () => {
+  if (!reportShown) return;
+  try { await navigator.clipboard.writeText(reportText(CTX.s, reportShown)); $("copyReportBtn").textContent = "Copied"; }
+  catch { $("copyReportBtn").textContent = "Copy failed"; }
+  setTimeout(() => $("copyReportBtn").textContent = "Copy report", 1500);
+};
+$("downloadTranscriptBtn").onclick = () => {
+  if (!reportShown) return;
+  const s = CTX.s, lines = reportShown.transcript.map(t => `${t.role === "kam" ? "Virtual KAM" : s.first + " (seller)"}: ${t.text}`);
+  const blob = new Blob([reportText(s, reportShown) + "\n\nTRANSCRIPT\n" + lines.join("\n")], { type:"text/plain" });
+  const link = document.createElement("a"); link.href = URL.createObjectURL(blob);
+  link.download = `kam-call-${s.id}-${reportShown.simulatedAt.slice(0,10)}.txt`; link.click();
+};
+document.querySelectorAll("dialog [data-close]").forEach(b => b.onclick = () => b.closest("dialog").close());
+renderSeller();
+</script>
+</body>
+</html>
