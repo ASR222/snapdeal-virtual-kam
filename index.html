@@ -595,7 +595,9 @@ function simulateProgress(s, a, rec) {
         items.push({ title:"Hidden listings fixed", status:"partly", result:`${h.autoFixable} of ${h.count} listings are live in search again. ${h.count - h.autoFixable} are still hidden: the seller has not sent the phone model details yet.` });
         extraWeekly += weekly(a.hiddenRecovery); break; }
       case "restart_ads_campaign": {
-        const budget = p.daily_budget || 200, spend = budget * gapDays, orders = Math.round(spend * a.adsRoas / s.asp);
+        const budget = p.daily_budget || 200, prevDaily = Math.round(s.traffic.ads.last.spend / 30);
+        const roas = budget > prevDaily ? a.adsRoas * Math.pow(prevDaily / budget, 0.35) : a.adsRoas;
+        const spend = budget * gapDays, orders = Math.round(spend * roas / s.asp);
         items.push({ title:"Ads campaign restarted", status:"working", result:`Spent ${fmtINR(spend)} since the restart and got ${orders} orders from ads, worth about ${fmtINR(orders * s.asp)}.` });
         extraWeekly += orders * 0.6; break; }
     }
@@ -629,7 +631,7 @@ E. Never say you did something unless a tool confirmed it in this call. If no to
 F. Explain before you suggest. Before proposing an action, give the evidence in one or two plain sentences with a number, for example "aapki teen kurtiyan naye sellers se 20 se 30 percent mehngi hain, isliye is mahine 140 orders kam aaye". Then propose the action and its rupee impact.
 
 YOUR VOICE
-${VOICE_GENDER[ctx.voice] === "female" ? 'You speak with a woman\'s voice. In Hindi always use feminine forms for yourself ("main bol rahi hoon", "main check karti hoon").' : 'You speak with a man\'s voice. In Hindi always use masculine forms for yourself ("main bol raha hoon", "main check karta hoon").'} Keep the same voice, pace and style for the whole call.
+${VOICE_GENDER[ctx.voice] === "female" ? 'You speak with a woman\'s voice. In Hindi always use feminine forms for yourself ("main bol rahi hoon", "main check karti hoon").' : 'You speak with a man\'s voice. In Hindi always use masculine forms for yourself ("main bol raha hoon", "main check karta hoon").'} Speak with a natural Indian accent and Indian rhythm, like an experienced account manager from Delhi or Mumbai, in English as well as in Hindi. Say Indian names, cities and rupee amounts the way Indians say them. Keep the same voice, accent, pace and style for the whole call.
 
 THE SELLER
 ${s.owner}, owner of ${s.shop}, ${s.city}. Category: ${s.category}. ${s.tenure}. Address them as "${s.first} ji".
@@ -665,7 +667,7 @@ ACTIONS YOU CAN TAKE (only after the seller agrees; the tools tell you if an act
 - Price cuts and sale discounts add up on the same product. Together they must leave the seller a profit. Let the tools do this maths: if the seller suggests a different combination, try it with the tools rather than refusing from memory, and if a tool refuses, explain its exact reason. Suggest the smallest cut that helps, and describe the result exactly: if a product will still cost more than the cheapest competitor, say so.
 - update_prices: lower prices on overpriced products. Ask their margin first and pass a max_cut_percent that leaves them a profit. Never suggest a cut larger than their margin. If the margin cannot cover the gap to competitors, say so honestly and offer what is possible: a small cut on the best seller only, pushing the products where they are already competitive, a combo offer (for example kurti with dupatta), or asking their supplier for a better rate.
 - join_promotion: add products to a Snapdeal sale event.
-- fix_hidden_listings: fill in missing product details so hidden products show in search again.
+- fix_hidden_listings: fill in missing product details so hidden products show in search again. For products that need the seller's input, ask them, then use add_phone_models with their answers.
 - restart_ads_campaign: restart a paused ads campaign at a daily budget the seller chooses.
 - schedule_follow_up, escalate_to_human_kam, send_whatsapp_summary, log_call_report, end_call.
 Recommend two or three actions, biggest rupee impact first. For each, say in one sentence what it does and roughly how much it brings back per month, then ask and wait (rule A).`;
@@ -755,6 +757,8 @@ const TOOL_DEFS = [
       product_ids:{ type:"array", items:{ type:"string" }, description:"Product ids from get_price_comparison" },
       seller_margin_percent:{ type:"integer", description:"The margin the seller told you" } }, ["promotion_id","discount_percent","product_ids","seller_margin_percent"]) },
   { name:"fix_hidden_listings", description:"Fill in missing required details on products hidden from search, so they show again. Only after the seller agrees.", parameters:obj() },
+  { name:"add_phone_models", description:"Fill in the phone models the seller gave you for hidden products that needed their input, so those products show in search again. Only after the seller has told you the models.",
+    parameters:obj({ items:{ type:"array", items:{ type:"object", properties:{ product_name:{ type:"string" }, phone_model:{ type:"string", description:"In the seller's words" } }, required:["product_name","phone_model"] } } }, ["items"]) },
   { name:"restart_ads_campaign", description:"Restart a paused ads campaign at the daily budget the seller chose. Only after the seller agrees to top up their ads balance.",
     parameters:obj({ daily_budget:{ type:"integer", description:"Rupees per day, as the seller said" } }, ["daily_budget"]) },
   { name:"schedule_follow_up", description:"Book a follow-up call at the day and time the seller chose.",
@@ -773,7 +777,7 @@ const TOOL_DEFS = [
       ["outcome","seller_mood","main_concerns","seller_commitments","risks","next_best_action"]) },
   { name:"end_call", description:"Hang up, after you have said goodbye.", parameters:obj() }
 ];
-const CONSENT_TOOLS = new Set(["mark_products_out_of_stock","fix_listing_stock","create_restock_plan","set_low_stock_alert","update_prices","join_promotion","fix_hidden_listings","restart_ads_campaign","schedule_follow_up"]);
+const CONSENT_TOOLS = new Set(["add_phone_models","mark_products_out_of_stock","fix_listing_stock","create_restock_plan","set_low_stock_alert","update_prices","join_promotion","fix_hidden_listings","restart_ads_campaign","schedule_follow_up"]);
 
 /* Guards: rules enforced in code, because instructions alone were not reliable in testing. */
 const consent = { kamAskedAt:0, sellerSpokeAt:0, voiceFrames:0 };
@@ -958,13 +962,33 @@ const TOOL_HANDLERS = {
       value_per_month:speak(a.hiddenRecovery * s.asp),
       next_step:"Ask the seller which phone models these 3 fit (they can tell you now or send it on WhatsApp). You do not need a human KAM for this." };
   },
+  add_phone_models({ items = [] }) {
+    const { s, a } = CTX, h = s.traffic.hidden; if (!h) return notApplicable("no products are hidden from search");
+    if (!CALL.actions.some(x => x.type === "fix_hidden_listings")) return { error:"Fix the other hidden products first with fix_hidden_listings (after the seller agrees)." };
+    const low = x => String(x).toLowerCase();
+    const done = [], unknown = [];
+    for (const it of items) {
+      const hit = h.needSellerInput.find(n => low(n).includes(low(it.product_name).split(" ")[0]) || low(it.product_name).includes(low(n).split(" ")[0]));
+      if (hit && !done.some(d => d.name === hit)) done.push({ name:hit, model:it.phone_model }); else if (!hit) unknown.push(it.product_name);
+    }
+    if (!done.length) return { error:"No match. The products that need a phone model are: " + h.needSellerInput.join(", ") + "." };
+    const extraOrders = Math.round((h.ordersLast - h.ordersNow) * done.length / h.count);
+    addAction("add_phone_models", { items:done }, { title:`${done.length} more hidden product${done.length > 1 ? "s" : ""} fixed`, body:done.map(d => `${d.name}: ${d.model}`).join("; ") + ".",
+      impact:`Recovers about ${fmtINR(extraOrders * s.asp)} more a month`, status:"done", label:"Done" });
+    const fixedTotal = h.autoFixable + done.length;
+    return { ok:true, updated:done, not_matched:unknown, hidden_products_fixed_in_total:`${fixedTotal} of ${h.count}`, extra_value_per_month:speak(extraOrders * s.asp) };
+  },
   restart_ads_campaign({ daily_budget }) {
     const { s, a } = CTX, ads = s.traffic.ads; if (!ads) return notApplicable("this seller has no ads campaign");
     const b = Math.max(50, Math.round(Number(daily_budget) || 0)); if (!daily_budget) return { error:"Ask the seller for a daily budget first." };
-    const monthlySpend = b * 30, orders = Math.round(monthlySpend * a.adsRoas / s.asp);
+    const prevDaily = Math.round(ads.last.spend / 30);
+    const roas = b > prevDaily ? a.adsRoas * Math.pow(prevDaily / b, 0.35) : a.adsRoas;   // each extra rupee earns less than the first
+    const monthlySpend = b * 30, orders = Math.round(monthlySpend * roas / s.asp);
     addAction("restart_ads_campaign", { daily_budget:b }, { title:"Ads campaign restarted", body:`${ads.campaign}: ${fmtINR(b)} a day once the ads balance is topped up.`,
       impact:`About ${orders} orders a month from ads (${fmtINR(orders * s.asp)})`, status:"waiting", label:"Seller to top up" });
-    return { ok:true, monthly_spend:speak(monthlySpend), orders_per_month_expected:orders, sales_per_month_expected:speak(orders * s.asp), note:"Live once the seller tops up the ads balance" };
+    return { ok:true, monthly_spend:speak(monthlySpend), orders_per_month_expected:orders, sales_per_month_expected:speak(orders * s.asp),
+      return_per_rupee:Math.round(roas * 10) / 10, previous_daily_budget:fmtINR(prevDaily),
+      note:"Live once the seller tops up the ads balance." + (b > prevDaily ? ` Above the previous ${fmtINR(prevDaily)} a day, each extra rupee brings back less than the first ones, so tell the seller the return per rupee falls from ${a.adsRoas} to about ${Math.round(roas * 10) / 10}, and suggest checking results after a week before raising it further.` : "") };
   },
   schedule_follow_up({ when, purpose }) {
     CALL.followUp = when;
