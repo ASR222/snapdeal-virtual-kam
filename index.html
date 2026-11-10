@@ -457,7 +457,11 @@ const SELLERS = {
       ads:{ campaign:"Phone accessories, always on", status:"Paused since day 9: the ads wallet ran out of balance",
             last:{ spend:6000, impressions:30000, orders:78 }, now:{ spend:1800, impressions:9000, orders:23 } },
       hidden:{ count:15, autoFixable:12, reason:"Missing 'compatible phone model' detail, which became mandatory in this month's catalogue update (assumed)",
-               ordersLast:110, ordersNow:30 },
+               ordersLast:110, ordersNow:30,
+               fixableProducts:["Back cover for Galaxy M34","Back cover for Redmi 13C","Tempered glass for iPhone 13","Tempered glass for Galaxy A05","Back cover for Vivo T3","Camera lens guard for iPhone 15",
+                                "Back cover for OnePlus Nord CE4","Tempered glass for Redmi Note 13","Back cover for Realme Narzo 70","Flip cover for Galaxy A35","Back cover for iQOO Z9","Tempered glass for Poco X6"],
+               needSellerInput:["Transparent silicone back cover","Matte black hard case","Privacy screen guard"],
+               whyNeedInput:"Their titles do not say which phone model they fit, so the seller must tell us" },
       note:""
     },
     prices:[
@@ -607,7 +611,7 @@ const VOICE_GENDER = { Kore:"female", Aoede:"female", Puck:"male", Charon:"male"
 const LANG_RULES = {
   hinglish:"Open the call in Hinglish: Hindi sentences with the common English words Indian shopkeepers use themselves (stock, order, cancel, sale, WhatsApp).",
   hindi:"Open the call in simple, everyday Hindi.",
-  english:"Open the call in simple Indian English."
+  english:"Open the call in simple Indian English. Stay in English unless the seller speaks Hindi."
 };
 function buildSystemPrompt(ctx) {
   const { s, a, language, prev, progress } = ctx;
@@ -631,7 +635,7 @@ THE SELLER
 ${s.owner}, owner of ${s.shop}, ${s.city}. Category: ${s.category}. ${s.tenure}. Address them as "${s.first} ji".
 
 LANGUAGE AND PACE
-${LANG_RULES[language]} If the seller switches language, switch with them and stay there. If they ask for only Hindi, avoid English words for the rest of the call.
+${LANG_RULES[language]} Switch language only when the seller does, then stay in their language. If they ask for only Hindi, avoid English words for the rest of the call.
 Speak slowly and clearly, the way you would talk to a busy shopkeeper on a phone line: short sentences, a small pause between ideas, one idea per sentence.
 In Hindi, use everyday shopkeeper words ("maal", "piece", "bikri", "grahak"), never textbook words ("utpaad", "ikaai", "suvidha"). Avoid business jargon such as listing, threshold, ranking, conversion or impressions; describe the idea in plain words ("Snapdeal par kam log aapka saaman dekh rahe hain").
 Rupee amounts are given below with exact Hindi and English wording. Use that wording; never convert amounts yourself.
@@ -947,9 +951,12 @@ const TOOL_HANDLERS = {
   },
   fix_hidden_listings() {
     const { s, a } = CTX, h = s.traffic.hidden; if (!h) return notApplicable("no products are hidden from search");
-    addAction("fix_hidden_listings", {}, { title:`${h.autoFixable} hidden products fixed`, body:`Missing details filled from product titles. ${h.count - h.autoFixable} more need the phone model from the seller on WhatsApp.`,
+    addAction("fix_hidden_listings", {}, { title:`${h.autoFixable} hidden products fixed`, body:`Phone model filled in from each product title. Still need the phone model from the seller: ${h.needSellerInput.join(", ")}.`,
       impact:`Recovers about ${fmtINR(a.hiddenRecovery * s.asp)} a month`, status:"done", label:"Done" });
-    return { ok:true, fixed:h.autoFixable, still_need_seller_input:h.count - h.autoFixable, value_per_month:speak(a.hiddenRecovery * s.asp) };
+    return { ok:true, what_changed:"Added the missing 'compatible phone model' detail to each product, taken from its title. They show in search again.",
+      fixed_products:h.fixableProducts, still_need_seller_input:h.needSellerInput, why_these_need_input:h.whyNeedInput,
+      value_per_month:speak(a.hiddenRecovery * s.asp),
+      next_step:"Ask the seller which phone models these 3 fit (they can tell you now or send it on WhatsApp). You do not need a human KAM for this." };
   },
   restart_ads_campaign({ daily_budget }) {
     const { s, a } = CTX, ads = s.traffic.ads; if (!ads) return notApplicable("this seller has no ads campaign");
