@@ -394,6 +394,7 @@ function englishWords(n) {
 /* Rounded for speech, with exact Hindi and English wording attached. */
 function speak(n) {
   const r = n >= 10000 ? Math.round(n / 500) * 500 : n >= 1000 ? Math.round(n / 100) * 100 : Math.round(n);
+  if (typeof CTX !== "undefined" && CTX && CTX.language === "english") return `${fmtINR(r)} (say "${englishWords(r)} rupees")`;
   return `${fmtINR(r)} (say "${hindiWords(r)} rupaye" in Hindi, "${englishWords(r)} rupees" in English)`;
 }
 
@@ -663,7 +664,7 @@ const VOICE_GENDER = { Kore:"female", Aoede:"female", Puck:"male", Charon:"male"
 const LANG_RULES = {
   hinglish:"Open the call in Hinglish: Hindi sentences with the common English words Indian shopkeepers use themselves (stock, order, cancel, sale, WhatsApp).",
   hindi:"Open the call in simple, everyday Hindi.",
-  english:"Open the call in simple Indian English. Stay in English unless the seller speaks Hindi."
+  english:"Speak English for the whole call: simple, clear Indian English. Do not use Hindi words or Hinglish sentences, not even short phrases, unless the seller speaks Hindi first. Addressing the seller with \"ji\" after their name is fine."
 };
 function buildSystemPrompt(ctx) {
   const { s, a, language, prev, progress } = ctx;
@@ -678,10 +679,10 @@ C. Never guess what you did not hear clearly. If a day, time, number or product 
 C2. Listen and use the seller's own words. If the seller gives a date, a number or a preference ("2 din mein", "Monday shaam"), use exactly that, in your speech and in the tools. Never replace it with your own suggestion. If they have not given a day and time for a follow-up, ask for one.
 D. End with a spoken summary before goodbye, unless the seller says they do not want one. Say it once; never repeat yourself.
 E. Never say you did something unless a tool confirmed it in this call. If no tool can do what the seller asks, say you will pass it to the team and use escalate_to_human_kam.
-F. Explain before you suggest. Before proposing an action, give the evidence in one or two plain sentences with a number, for example "aapki teen kurtiyan naye sellers se 20 se 30 percent mehngi hain, isliye is mahine 140 orders kam aaye". Then propose the action and its rupee impact.
+F. Explain before you suggest. Before proposing an action, give the evidence in one or two plain sentences with a number, for example ${language === "english" ? '"three of your kurtis cost 20 to 30 percent more than new sellers\' kurtis, so you got 140 fewer orders this month"' : '"aapki teen kurtiyan naye sellers se 20 se 30 percent mehngi hain, isliye is mahine 140 orders kam aaye"'}. Then propose the action and its rupee impact.
 
 YOUR VOICE
-${VOICE_GENDER[ctx.voice] === "female" ? 'You speak with a woman\'s voice. In Hindi always use feminine forms for yourself ("main bol rahi hoon", "main check karti hoon").' : 'You speak with a man\'s voice. In Hindi always use masculine forms for yourself ("main bol raha hoon", "main check karta hoon").'} Speak with a natural Indian accent and Indian rhythm, like an experienced account manager from Delhi or Mumbai, in English as well as in Hindi. Say Indian names, cities and rupee amounts the way Indians say them. Keep the same voice, accent, pace and style for the whole call.
+You speak with a ${VOICE_GENDER[ctx.voice] === "female" ? "woman's" : "man's"} voice.${language === "english" ? "" : VOICE_GENDER[ctx.voice] === "female" ? ' In Hindi always use feminine forms for yourself ("main bol rahi hoon", "main check karti hoon").' : ' In Hindi always use masculine forms for yourself ("main bol raha hoon", "main check karta hoon").'} Speak with a natural Indian accent and rhythm, and say Indian names, cities and rupee amounts the way Indians say them. The accent is only about pronunciation: it never changes which language you speak. Keep the same voice, accent, pace and style for the whole call.
 
 THE SELLER
 ${s.owner}, owner of ${s.shop}, ${s.city}. Category: ${s.category}. ${s.tenure}. Address them as "${s.first} ji".
@@ -689,8 +690,9 @@ ${s.owner}, owner of ${s.shop}, ${s.city}. Category: ${s.category}. ${s.tenure}.
 LANGUAGE AND PACE
 ${LANG_RULES[language]} Switch language only when the seller does, then stay in their language. If they ask for only Hindi, avoid English words for the rest of the call.
 Speak slowly and clearly, the way you would talk to a busy shopkeeper on a phone line: short sentences, a small pause between ideas, one idea per sentence.
-In Hindi, use everyday shopkeeper words ("maal", "piece", "bikri", "grahak"), never textbook words ("utpaad", "ikaai", "suvidha"). Avoid business jargon such as listing, threshold, ranking, conversion or impressions; describe the idea in plain words ("Snapdeal par kam log aapka saaman dekh rahe hain").
-Rupee amounts are given below with exact Hindi and English wording. Use that wording; never convert amounts yourself.
+${language === "english"
+  ? 'Avoid business jargon such as listing, threshold, ranking, conversion or impressions; describe the idea in plain words ("fewer shoppers are seeing your products on Snapdeal").\nRupee amounts are given below with their exact English wording. Use that wording; never convert amounts yourself.'
+  : 'In Hindi, use everyday shopkeeper words ("maal", "piece", "bikri", "grahak"), never textbook words ("utpaad", "ikaai", "suvidha"). Avoid business jargon such as listing, threshold, ranking, conversion or impressions; describe the idea in plain words ("Snapdeal par kam log aapka saaman dekh rahe hain").\nRupee amounts are given below with exact Hindi and English wording. Use that wording; never convert amounts yourself.'}
 
 ACCOUNT NUMBERS (last month → this month)
 ${row("Sales", fmtINR(L.sales), fmtINR(N.sales), a.salesChange)} = ${speak(N.sales)} this month
@@ -1226,6 +1228,18 @@ const TOOL_NAME_RE = new RegExp("\\b(" + TOOL_DEFS.map(t => t.name).join("|") + 
 function cleanKamText(raw) {
   return raw.replace(/\*+\s*calling tool\s*\*+/gi, "").replace(/`[^`]*`/g, "").replace(/`[^`]*$/, "").replace(TOOL_NAME_RE, "").replace(/[ \t]{2,}/g, " ");
 }
+/* English calls: if the KAM drifts into Hindi while the seller has only spoken English, remind it quietly.
+   turnComplete:false adds the note to the conversation without making the KAM start a new reply. */
+const HINDI_MARK = /\b(hai|hain|aap|aapke|aapki|aapka|kya|nahi|nahin|gaye|gayi|gaya|raha|rahi|rahe|kijiye|karein|karte|karti|hoon|mein|aur|bhi|sakti|sakta|dekh|wala|waale|wajah|kyunki|lekin)\b/gi;
+const looksHindi = t => /[\u0900-\u097F]/.test(t) || ((t.match(HINDI_MARK) || []).length >= 3);
+function guardLanguage(role, turn) {
+  if (CTX.language !== "english" || !turn) return;
+  if (role === "seller") { if (looksHindi(turn.raw)) CALL.sellerUsedHindi = true; return; }
+  if (CALL.sellerUsedHindi || turn.langNudged || !looksHindi(turn.raw)) return;
+  if (!$("modelSel").value.startsWith("gemini-3.8") || !ws || ws.readyState !== 1) return;
+  turn.langNudged = true;
+  ws.send(JSON.stringify({ clientContent:{ turns:[{ role:"user", parts:[{ text:"[Reminder: the seller is speaking English. From your next sentence on, reply only in English, with no Hindi words.]" }] }], turnComplete:false } }));
+}
 function appendTranscript(role, text) {
   if (!text) return;
   if (role === "seller") { consent.sellerSpokeAt = Date.now(); noteSellerSpeech(text); }
@@ -1241,6 +1255,7 @@ function appendTranscript(role, text) {
   }
   currentTurn.raw += text;
   currentTurn.txt.textContent = role === "kam" ? cleanKamText(currentTurn.raw) : currentTurn.raw;
+  guardLanguage(role, currentTurn);
   t.scrollTop = t.scrollHeight;
 }
 function noteDrop(text) { logEvent(text, true); }
