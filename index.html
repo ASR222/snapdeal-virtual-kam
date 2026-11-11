@@ -714,13 +714,13 @@ There are four possible causes on the seller's screen: stockouts, cancellations,
 
 ACTIONS YOU CAN TAKE (only after the seller agrees; the tools tell you if an action does not apply to this seller)
 - fix_listing_stock: set stock to zero on products that show stock the seller does not have. Stops new cancellations.
-- create_restock_plan: restock the products that sold most before running out. If cash is tight, suggest only the top 5. When the seller names specific products, pass exactly those as product_names; adding a product later means calling it again with the full list. If they want a plan but cannot give a date yet, make it anyway and say the date is open.
+- create_restock_plan: restock the products that sold most before running out. You know from get_out_of_stock_products which products are out of stock; name them rather than asking the seller. If cash is tight, suggest only the top 5. When the seller names specific products, pass exactly those as product_names; adding a product later means calling it again with the full list. If they want a plan but cannot give a date yet, make it anyway and say the date is open.
 - set_low_stock_alert: a WhatsApp alert, plus a note in the seller panel, when a product falls to a few pieces.
 - Price cuts and sale discounts add up on the same product. Together they must leave the seller a profit. Let the tools do this maths: if the seller suggests a different combination, try it with the tools rather than refusing from memory, and if a tool refuses, explain its exact reason. Suggest the smallest cut that helps, and describe the result exactly: if a product will still cost more than the cheapest competitor, say so.
 - update_prices: lower prices on overpriced products. Ask their margin first and pass a max_cut_percent that leaves them a profit. Never suggest a cut larger than their margin. If the margin cannot cover the gap to competitors, say so honestly and offer what is possible: a small cut on the best seller only, pushing the products where they are already competitive, a combo offer (for example kurti with dupatta), or asking their supplier for a better rate.
 - join_promotion: add products to a Snapdeal sale event.
 - fix_hidden_listings: fill in missing product details so hidden products show in search again. For products that need the seller's input, ask them, then use add_phone_models with their answers.
-- restart_ads_campaign: restart a paused ads campaign at a daily budget the seller chooses.
+- restart_ads_campaign: restart a paused ads campaign at a daily budget the seller chooses. Say what it costs per month as well as what it should bring in, and if the budget is higher than before, say that each extra rupee brings back less.
 - schedule_follow_up, escalate_to_human_kam, send_whatsapp_summary, log_call_report, end_call.
 Recommend two or three actions, biggest rupee impact first. For each, say in one sentence what it does and roughly how much it brings back per month, then ask and wait (rule A).`;
 
@@ -758,7 +758,8 @@ HOW THIS CALL SHOULD GO
 1. Greet the seller by name and ask how you can help. Do not assume the reason; let them explain. Acknowledge their worry in one short sentence.
 2. Share what you see in the numbers in two or three short sentences, then investigate with the data tools and with questions, one at a time.
 3. Recommend and agree actions (rule A). If the seller pushes back, take the constraint seriously and adapt the plan rather than repeating it.
-4. Close in this order: (a) a spoken summary in three short sentences: the main problem, what you have done, and what the seller will do and by when; (b) ask which day and time suits them for a follow-up call and wait, then use schedule_follow_up with their answer; (c) send_whatsapp_summary and tell them it is on WhatsApp; (d) log_call_report silently; (e) say goodbye warmly; (f) end_call.`;
+4. Before closing, make sure the seller has heard every fix the data shows (for example products hidden from search), even if they are in a hurry: one sentence each, with its rupee impact. They can say no.
+5. Close in this order: (a) a spoken summary in three short sentences: the main problem, what you have done, and what the seller will do and by when; (b) ask which day and time suits them for a follow-up call and wait, then use schedule_follow_up with their answer; (c) send_whatsapp_summary and tell them it is on WhatsApp; (d) log_call_report silently; (e) say goodbye warmly; (f) end_call.`;
   }
   p += `
 
@@ -938,6 +939,8 @@ const TOOL_HANDLERS = {
     const key = normaliseIssue(issue);
     if (!key) return { error:"Unknown issue. Use one of: " + Object.keys(ISSUES).join(", ") };
     if (!STATUS_LABEL[status] || status === "not_checked") return { error:"Unknown status. Use suspected, confirmed or ruled_out." };
+    if (status !== "suspected" && !CALL.checked.has(EVIDENCE_TOOL[key]))
+      return { error:`Not done: check the data first with ${EVIDENCE_TOOL[key]}, then mark ${key} as ${status}. You may mark it suspected without checking.` };
     setHypothesis(key, status, evidence); return { ok:true };
   },
   fix_listing_stock() {
@@ -952,7 +955,10 @@ const TOOL_HANDLERS = {
     let picks;
     if (product_names.length) {
       // Out-of-stock products, plus products running low (they can be restocked before they run out).
-      const pool = [...avail, ...s.prices.filter(p => !avail.some(x => x.name === p.name)).map(p => ({ name:p.name, lastMonthOrders:0, lowStock:true }))];
+      const back = new Set(CTX.stock.restocked || []);
+      const olderOut = s.oosProducts.filter(p => !p.newThisMonth && !back.has(p.name));
+      const outNow = [...avail, ...olderOut];
+      const pool = [...outNow, ...s.prices.filter(p => !outNow.some(x => x.name === p.name)).map(p => ({ name:p.name, lastMonthOrders:0, lowStock:true }))];
       const words = x => String(x).toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/).filter(w => w.length > 2);
       picks = []; const unknown = [];
       for (const want of product_names) {
@@ -960,7 +966,7 @@ const TOOL_HANDLERS = {
         const hit = pool.find(p => ws.length && ws.every(w => words(p.name).some(x => x.startsWith(w) || w.startsWith(x)))) || pool.find(p => ws.some(w => words(p.name).includes(w)));
         if (hit && !picks.includes(hit)) picks.push(hit); else if (!hit) unknown.push(want);
       }
-      if (!picks.length) return { error:"None of those products can go in a restock plan. Still out of stock: " + avail.slice(0, 6).map(p => p.name).join(", ") + "." };
+      if (!picks.length) return { error:"None of those products can go in a restock plan. Out of stock now: " + outNow.slice(0, 6).map(p => p.name).join(", ") + "." };
       const backNames = CTX.stock.restocked || [];
       const alreadyBack = unknown.filter(u => backNames.some(n => words(n).some(w => words(u).includes(w))));
       if (alreadyBack.length) return { error:`Not done: ${alreadyBack.join(", ")} is already back in stock. Tell the seller, and suggest from what is still out of stock: ${avail.slice(0, 4).map(p => p.name).join(", ")}.` };
@@ -976,7 +982,8 @@ const TOOL_HANDLERS = {
     addAction("create_restock_plan", { top_n:n, restock_by, products:picks.map(p => p.name) }, { title:`Restock plan: ${n} product${n > 1 ? "s" : ""}`,
       body:`${picks.map(p => p.name + (p.lowStock ? " (running low)" : "")).join(", ")}.${restock_by ? ` Seller restocks: ${restock_by}.` : " Date not agreed yet."}`,
       impact:orders ? `Recovers about ${fmtINR(orders * s.asp)} a month (${share}% of lost orders)` : "Prevents the next stock-out", status:"waiting", label:"Seller to restock" }, "create_restock_plan");
-    return { ok:true, products_in_plan:picks.map(p => p.name), note:"Only the products listed here are in the plan. Name exactly these when you confirm.",
+    return { ok:true, products_in_plan:picks.map(p => p.name + (p.lowStock ? " (not out of stock yet, running low)" : "")),
+      note:"Only the products listed here are in the plan. Say their exact names when you confirm, so the seller can correct you if you picked the wrong product.",
       value_per_month:speak(orders * s.asp), share_of_lost_orders_percent:share, restock_by:restock_by || "not agreed yet" };
   },
   mark_products_out_of_stock({ product_names = [] }) {
@@ -1017,7 +1024,8 @@ const TOOL_HANDLERS = {
         still_above_lowest_competitor_percent:x.stillAboveLowestPct, matches_competitors:x.matchesCompetitors })),
       orders_won_back_per_month:recovered, extra_sales_per_month:speak(gain),
       replaced_earlier_price_change:replaced ? "Yes. It had not gone live yet, so revising it is allowed and is not a price rise." : "No",
-      note:plans.some(x => !x.matchesCompetitors) ? "These prices are still above the cheapest competitors, so expect a partial recovery. Tell the seller this honestly and suggest other ways to compete." : "Prices now within about 5 percent of the cheapest competitors." };
+      note:(plans.some(x => !x.matchesCompetitors) ? "These prices are still above the cheapest competitors, so expect a partial recovery. Tell the seller this honestly and suggest other ways to compete." : "Prices now within about 5 percent of the cheapest competitors.") +
+        ` Tell the seller the cut you applied (up to ${maxCut} percent). The money figure is extra sales ("bikri"), not savings.` };
   },
   join_promotion({ promotion_id, discount_percent, product_ids = [], seller_margin_percent }) {
     const { s, a } = CTX; const promo = PROMOTIONS.find(x => x.id === promotion_id);
@@ -1069,6 +1077,7 @@ const TOOL_HANDLERS = {
       impact:`About ${orders} orders a month from ads (${fmtINR(orders * s.asp)})`, status:"waiting", label:"Seller to top up" });
     return { ok:true, monthly_spend:speak(monthlySpend), orders_per_month_expected:orders, sales_per_month_expected:speak(orders * s.asp),
       return_per_rupee:Math.round(roas * 10) / 10, previous_daily_budget:fmtINR(prevDaily),
+      spend_versus_sales:`About ${fmtINR(monthlySpend)} a month on ads for about ${fmtINR(orders * s.asp)} of sales. Sales are not profit: profit is sales minus product cost minus ad spend, so if the seller asks about profit, ask their margin and work it out with them.`,
       note:"Live once the seller tops up the ads balance." + (b > prevDaily ? ` Above the previous ${fmtINR(prevDaily)} a day, each extra rupee brings back less than the first ones, so tell the seller the return per rupee falls from ${a.adsRoas} to about ${Math.round(roas * 10) / 10}, and suggest checking results after a week before raising it further.` : "") };
   },
   schedule_follow_up({ when, purpose }) {
@@ -1091,8 +1100,10 @@ const TOOL_HANDLERS = {
     CALL.report = r; logEvent("Call report filed for the KAM team"); return { ok:true }; },
   end_call() { pendingHangup = true; maybeHangUp(); return { ok:true }; }
 };
+const EVIDENCE_TOOL = { stockouts:"get_out_of_stock_products", cancellations:"get_cancellation_breakdown", pricing:"get_price_comparison", visibility:"get_traffic_and_conversion" };
 async function runTool(name, args) {
   const fn = TOOL_HANDLERS[name]; if (!fn) return { error:"Unknown tool " + name };
+  if (name.startsWith("get_")) CALL.checked.add(name);
   if (CONSENT_TOOLS.has(name)) { const w = consentGuard(); if (w) return w; }
   if (name === "send_whatsapp_summary" || name === "end_call") { const w = closingGuard(name); if (w) return w; }
   return await fn(args || {});
@@ -1113,7 +1124,7 @@ let CTX = null;                   // current seller, analysis, mode, history
 let CALL = null;                  // state of the call in progress
 function newCallState() {
   return { board:Object.fromEntries(Object.keys(ISSUES).map(k => [k, { status:"not_checked", evidence:"" }])),
-    actions:[], margin:null, productCuts:{}, promoDiscount:{}, followUp:null, escalations:[], whatsapp:null, report:null, turns:[], startedAt:0, connected:false };
+    actions:[], checked:new Set(), margin:null, productCuts:{}, promoDiscount:{}, followUp:null, escalations:[], whatsapp:null, report:null, turns:[], startedAt:0, connected:false };
 }
 function currentSeller() { return SELLERS[$("sellerSel").value]; }
 /* Products still out of stock now, after restocks reported since earlier calls (best sellers first). */
@@ -1142,6 +1153,7 @@ function renderSeller() {
   CALL = newCallState();
   if (prev) {
     Object.assign(CALL.board, JSON.parse(JSON.stringify(prev.diagnosis)));
+    Object.values(EVIDENCE_TOOL).forEach(t => CALL.checked.add(t));   // checked in an earlier call
     if (prev.margin) CALL.margin = prev.margin;
     if (prev.productCuts) CALL.productCuts = { ...prev.productCuts };
   }
@@ -1561,7 +1573,8 @@ async function reconnect(mode, ev) {
 /* What the KAM is told after a reconnect. With a resumption handle it still has the whole conversation;
    without one it gets a recap, so it can continue without repeating finished actions. */
 function resumeNote(withHandle) {
-  const ask = "Say briefly that the line dropped for a moment, then repeat your last point or question in one short sentence and continue. Do not repeat actions already done.";
+  const langName = { english:"English only", hindi:"Hindi", hinglish:"Hinglish" }[CTX.language] || "the seller's language";
+  const ask = `Say briefly that the line dropped for a moment, then repeat your last point or question in one short sentence and continue. Speak ${CALL.sellerUsedHindi && CTX.language === "english" ? "the language the seller is using" : langName}. Do not repeat actions already done.`;
   if (withHandle) return `[The phone line dropped for a moment and is back. ${ask}]`;
   const recent = CALL.turns.filter(t => t.role !== "event").slice(-12)
     .map(t => `${t.role === "kam" ? "You" : CTX.s.first}: ${t.role === "kam" ? cleanKamText(t.raw).trim() : t.raw.trim()}`).join("\n");
@@ -1627,6 +1640,7 @@ function refreshAfterCall() {
   const next = simulateProgress(s, CTX.a, prev);
   CTX.stock = stockBefore;
   renderProgress(next);
+  if (!$("plan").querySelector(".subhead")) $("plan").insertAdjacentHTML("afterbegin", `<div class="subhead">This call</div>`);
   $("progress").scrollIntoView({ block:"nearest" });
   $("outboundBtn").textContent = "KAM’s follow-up call";
   const banner = $("followBanner"); banner.hidden = false;
